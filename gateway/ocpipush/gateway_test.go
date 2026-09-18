@@ -3,6 +3,7 @@ package ocpipush_test
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"net/http"
 	"testing"
 
@@ -42,8 +43,8 @@ func newFixture(t *testing.T) fixture {
 	pushGateway, err := ocpipush.NewGateway(
 		chargerrepo.NewInMemoryRepository(),
 		validConfig,
+		slog.New(slog.NewJSONHandler(out, nil)),
 		metricsGateway,
-		out,
 		sender,
 		siteRepository,
 	)
@@ -216,7 +217,7 @@ func TestDelivery(t *testing.T) {
 		assert.Equal(t, pushes[0].URL, validEMSPBaseURL+"/sessions/US/SIM/SES-1")
 		assert.Equal(t, pushes[1].URL, validEMSPBaseURL+"/sessions/US/SIM/SES-2")
 		f.pushGateway.Stop()
-		assert.Contains(t, f.out.String(), "Error: sender.Send PUT")
+		assert.Contains(t, f.out.String(), `"msg":"push failed","method":"PUT"`)
 		assert.Equal(t, f.metricsGateway.Snapshot()[metrics.PushesFailed], int64(2))
 		assert.Equal(t, f.metricsGateway.Snapshot()[metrics.PushesSent], int64(0))
 	})

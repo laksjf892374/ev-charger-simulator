@@ -2,7 +2,7 @@ package app
 
 import (
 	"fmt"
-	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -88,8 +88,8 @@ type world struct {
 
 func newWorld(
 	config Config,
+	logger *slog.Logger,
 	metricsGateway metrics.Gateway,
-	out io.Writer,
 	randomGateway random.Gateway,
 	wallNow clock.NowFunc,
 	worldID string,
@@ -122,8 +122,8 @@ func newWorld(
 			Mapper:      mapper,
 			QueueSize:   pushQueueSize,
 		},
+		logger,
 		metricsGateway,
-		out,
 		ocpipush.NewHTTPSender(clockGateway, traceGateway),
 		siteRepository,
 	)

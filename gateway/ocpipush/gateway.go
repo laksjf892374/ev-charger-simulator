@@ -4,7 +4,7 @@ package ocpipush
 
 import (
 	"fmt"
-	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -34,8 +34,8 @@ type Gateway interface {
 type pushGateway struct {
 	chargerRepository chargerrepo.Repository
 	config            Config
+	logger            *slog.Logger
 	metricsGateway    metrics.Gateway
-	out               io.Writer
 	queue             chan func() Push
 	sender            Sender
 	siteRepository    siterepo.Repository
@@ -47,8 +47,8 @@ type pushGateway struct {
 func NewGateway(
 	chargerRepository chargerrepo.Repository,
 	config Config,
+	logger *slog.Logger,
 	metricsGateway metrics.Gateway,
-	out io.Writer,
 	sender Sender,
 	siteRepository siterepo.Repository,
 ) (Gateway, error) {
@@ -65,8 +65,8 @@ func NewGateway(
 	gateway := &pushGateway{
 		chargerRepository: chargerRepository,
 		config:            config,
+		logger:            logger,
 		metricsGateway:    metricsGateway,
-		out:               out,
 		queue:             make(chan func() Push, config.QueueSize),
 		sender:            sender,
 		siteRepository:    siteRepository,
@@ -93,7 +93,7 @@ func (g *pushGateway) run() {
 			push := buildPush()
 			if err := g.sender.Send(push); err != nil {
 				g.metricsGateway.Add(metrics.PushesFailed, 1)
-				fmt.Fprintf(g.out, "Error: sender.Send %s %s: %v\n", push.Method, push.URL, err)
+				g.logger.Error("push failed", "method", push.Method, "url", push.URL, "error", err.Error())
 				continue
 			}
 
@@ -118,7 +118,7 @@ func (g *pushGateway) enqueue(description string, buildPush func() Push) error {
 		g.metricsGateway.Set(metrics.PushQueueDepth, int64(len(g.queue)))
 	default:
 		g.metricsGateway.Add(metrics.PushesDropped, 1)
-		fmt.Fprintf(g.out, "Error: push queue is full, dropped %s\n", description)
+		g.logger.Error("push dropped, queue is full", "push", description)
 	}
 
 	return nil

@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"fmt"
-	"io"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -26,19 +26,19 @@ type job struct {
 
 type tickerGateway struct {
 	jobByJobID map[string]job
+	logger     *slog.Logger
 	newTicker  NewTickerFunc
-	out        io.Writer
 	mu         sync.Mutex
 }
 
 func NewTickerGateway(
+	logger *slog.Logger,
 	newTicker NewTickerFunc,
-	out io.Writer,
 ) Gateway {
 	return &tickerGateway{
 		jobByJobID: map[string]job{},
+		logger:     logger,
 		newTicker:  newTicker,
-		out:        out,
 	}
 }
 
@@ -87,7 +87,7 @@ func (g *tickerGateway) run(jobID string, scheduledJob job, callback func() erro
 		case <-ticker.C():
 			// a background job has nobody to return an error to
 			if err := runCallback(callback); err != nil {
-				fmt.Fprintf(g.out, "Error: job %q: %v\n", jobID, err)
+				g.logger.Error("scheduled job failed", "job_id", jobID, "error", err.Error())
 			}
 		}
 	}

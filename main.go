@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -97,7 +98,12 @@ func run() error {
 		return fmt.Errorf("simulator.ConnectMockEMSP: %w", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "CPO simulator listening on :%s, pushing to %s\n", port, config.EMSPBaseURL)
+	slog.New(slog.NewJSONHandler(os.Stdout, nil)).Info(
+		"simulator started",
+		"port", port,
+		"emsp_base_url", config.EMSPBaseURL,
+		"initial_speed", config.InitialSpeed,
+	)
 
 	interrupted := make(chan os.Signal, 1)
 	signal.Notify(interrupted, os.Interrupt, syscall.SIGTERM)

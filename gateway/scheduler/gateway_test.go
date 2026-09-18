@@ -3,6 +3,7 @@ package scheduler_test
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"testing"
 
 	"cposim/gateway/scheduler"
@@ -15,8 +16,8 @@ func newTickerGateway(t *testing.T) (scheduler.Gateway, *scheduler.FakeTicker, *
 	fakeTicker := scheduler.NewFakeTicker()
 	out := &bytes.Buffer{}
 	schedulerGateway := scheduler.NewTickerGateway(
+		slog.New(slog.NewJSONHandler(out, nil)),
 		func() scheduler.Ticker { return fakeTicker },
-		out,
 	)
 
 	return schedulerGateway, fakeTicker, out
@@ -48,7 +49,7 @@ func TestStartScheduledJob(t *testing.T) {
 		assert.NoError(t, schedulerGateway.StopScheduledJob("job"))
 
 		// Then
-		assert.Contains(t, out.String(), `Error: job "job": boom`)
+		assert.Contains(t, out.String(), `"msg":"scheduled job failed","job_id":"job","error":"boom"`)
 	})
 
 	t.Run("survives a panicking callback, reports it, and runs the next tick", func(t *testing.T) {
@@ -71,7 +72,7 @@ func TestStartScheduledJob(t *testing.T) {
 
 		// Then
 		assert.Equal(t, callbackCount, 2)
-		assert.Contains(t, out.String(), `Error: job "job": callback panicked: boom`)
+		assert.Contains(t, out.String(), `"job_id":"job","error":"callback panicked: boom"`)
 	})
 
 	t.Run("runs the callback once per tick", func(t *testing.T) {

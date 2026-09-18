@@ -59,7 +59,6 @@ type simulator struct {
 	lastTickWallNanos atomic.Int64
 	logger            *slog.Logger
 	metricsGateway    metrics.Gateway
-	out               io.Writer
 	randomGateway     random.Gateway
 	resetMu           sync.Mutex
 	schedulerGateway  scheduler.Gateway
@@ -83,16 +82,16 @@ func NewSimulatorWithTicker(
 	randomGateway random.Gateway,
 	wallNow clock.NowFunc,
 ) (Simulator, error) {
-	// several goroutines report through Out: request logging, the tick, the push worker
-	out := &lockedWriter{writer: config.Out}
+	// Everything the process reports (requests, failed ticks, failed or dropped pushes) is one
+	// structured log, written as JSON lines. slog serialises concurrent writers itself.
+	logger := slog.New(slog.NewJSONHandler(config.Out, nil))
 
 	s := &simulator{
 		config:           config,
-		logger:           slog.New(slog.NewJSONHandler(out, nil)),
+		logger:           logger,
 		metricsGateway:   metrics.NewInMemoryGateway(),
-		out:              out,
 		randomGateway:    randomGateway,
-		schedulerGateway: scheduler.NewTickerGateway(newTicker, out),
+		schedulerGateway: scheduler.NewTickerGateway(logger, newTicker),
 		wallNow:          wallNow,
 	}
 	s.lastTickWallNanos.Store(wallNow().UnixNano())
@@ -112,18 +111,6 @@ func NewSimulatorWithTicker(
 	return s, nil
 }
 
-type lockedWriter struct {
-	writer io.Writer
-	mu     sync.Mutex
-}
-
-func (w *lockedWriter) Write(data []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	return w.writer.Write(data)
-}
-
 // replaceWorld builds an empty world and makes it current. The previous world, if any, is
 // returned still running, so the caller decides when to stop it.
 func (s *simulator) replaceWorld() (*world, error) {
@@ -134,8 +121,8 @@ func (s *simulator) replaceWorld() (*world, error) {
 
 	next, err := newWorld(
 		s.config,
+		s.logger,
 		s.metricsGateway,
-		s.out,
 		s.randomGateway,
 		s.wallNow,
 		fmt.Sprintf("WORLD-%06d", s.worldCount),
