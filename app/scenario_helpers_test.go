@@ -10,8 +10,19 @@ import (
 	"cposim/internal/assert"
 )
 
+// Scenarios are whole user stories, driven only through the public HTTP APIs of a running
+// simulator with the mock eMSP mounted: what a person at a charger, a driver with a phone, and an
+// operator would actually do, and what each of them should see.
+//
 // The helpers below let a scenario read like the story it tells. They only ever use the public
 // HTTP APIs: /api is the person at the charger (or the operator), /emsp/api is the driver's phone.
+
+const (
+	almostFullVehicle    = `{"battery_capacity_kwh": 60, "max_power_kw": 150, "state_of_charge": 0.95}`
+	defaultVehicle       = ``
+	validHubChargerID    = "EVSE-000001" // seeded, 150 kW
+	validSecondChargerID = validFastChargerID
+)
 
 type chargerView struct {
 	ActiveSession *struct {
