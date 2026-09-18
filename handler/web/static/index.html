@@ -66,6 +66,11 @@ body:not(.advanced) .adv{display:none!important}
 .explain>summary small{font-weight:400;color:var(--muted);font-size:13px;margin-left:6px}
 .behind{padding:4px 20px 22px;display:flex;flex-direction:column;gap:24px}
 .behind h3{font-family:var(--cond);font-size:18px;font-weight:600;margin:0}
+.behind h3 small{font-family:var(--sans);font-size:13px;font-weight:400;color:var(--muted);margin-left:8px}
+.industry{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:36px;align-items:center}
+.industry .fan{margin-bottom:0}
+.behind .hood-intro{max-width:none}
+@media (max-width:900px){.industry{grid-template-columns:minmax(0,1fr)}}
 .behind .hood{padding:0}
 .behind .more{border-top:1px solid var(--line);padding-top:20px}
 .name{font-weight:600}
@@ -258,7 +263,7 @@ input[type=number]{width:84px}
   <details class="explain" id="behind">
     <summary>What's really going on? <small>the two companies involved, and the messages between them</small></summary>
     <div class="behind">
-      <div>
+      <div class="industry">
         <div class="fan" role="img" aria-label="A driver uses one eMSP app, which connects over OCPI to many charging networks; this simulator stands in for one of them">
           <div class="fan-left">
             <span class="node"><b>Driver</b>one app, one bill</span>
@@ -274,10 +279,12 @@ input[type=number]{width:84px}
             <span class="node cpo me"><b>This simulator</b>a stand-in CPO</span>
           </div>
         </div>
-        <p>A <b>CPO</b> runs chargers. An <b>eMSP</b> is the app drivers use — one account that works across many CPOs, like a travel site on top of many airlines.</p>
-        <p>Testing against a real CPO takes a partner sandbox and physical chargers. This is a CPO you control: run the everyday flow, make chargers as reliable as real ones, or make one fail.</p>
+        <div class="words">
+          <p>A <b>CPO</b> runs chargers. An <b>eMSP</b> is the app drivers use — one account that works across many CPOs, like a travel site on top of many airlines.</p>
+          <p>Testing against a real CPO takes a partner sandbox and physical chargers. This is a CPO you control: run the everyday flow, make chargers as reliable as real ones, or make one fail.</p>
+        </div>
       </div>
-      <h3>The messages behind the scenes <span class="count" id="msg-count">0</span></h3>
+      <h3>The messages behind the scenes <small id="msg-count">none yet</small></h3>
     <div class="hood">
       <p class="hood-intro">The two companies talk over <b>OCPI</b>, which is split into modules — one line each below. Pick a message to see which line it travelled on, and which way. Pick a line to see its messages.</p>
       <div class="wire">
@@ -669,7 +676,7 @@ input[type=number]{width:84px}
       while (log.children.length > MAX_LOG) log.removeChild(log.lastChild);
     });
     messageCount += entries.length;
-    $("msg-count").textContent = messageCount;
+    $("msg-count").textContent = messageCount + (messageCount === 1 ? " message" : " messages") + " so far, newest first";
   }
 
   // ---------- header, checklist, legend ----------
