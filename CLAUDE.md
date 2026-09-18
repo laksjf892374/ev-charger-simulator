@@ -12,6 +12,7 @@ go test -race ./...                      # use this when touching goroutines, th
 go test ./controller/charger -run TestTick   # single package / test
 go vet ./...
 gofmt -l .                               # must print nothing
+go run .                                 # serves on :8080 (PORT), mock eMSP mounted unless EMSP_BASE_URL is set
 ```
 
 Go 1.26, **standard library only**. Do not add third-party modules (no testify, no mock
@@ -52,13 +53,27 @@ main → app (DI root) → handler/* → controller/command → controller/charg
 - `gateway/trace` — in-memory log of OCPI exchanges in both directions, from the CPO's point of
   view, each with a plain-English `Summary`. Inbound is recorded by `handler/ocpi`'s middleware
   (handlers call `describe`), outbound by the HTTP `Sender`.
-- The mock eMSP is a demo harness at the edge. Core and adapter packages must never import it; it
-  talks to the simulator only over HTTP, like a real eMSP.
+- `handler/api` — the control API (`/api/...`): everything a person or CI script can do to the
+  simulated world. The UI has no private endpoints. A refused physical action is 409, a bad
+  request body 400, a rejected configuration 422.
+- `app/` — DI root: the only place that constructs concrete implementations, holds the tunable
+  constants, and seeds the demo world. `app/simulator_test.go` and `app/mock_emsp_test.go` are the
+  end-to-end tests: real HTTP, `scheduler.FakeTicker`, a fake wall clock, and either
+  `app.FakeEMSP` (records pushes) or the mounted mock eMSP.
+- `mockemsp/` — a deliberately naive eMSP (OCPI receiver + a tiny "driver's app" API under
+  `/emsp/...`) so the simulator can be demonstrated without a real one. It is a guest at the edge:
+  only `app` and `main` import it, it is handed URLs rather than controllers, and it talks to the
+  CPO only over HTTP, like a real eMSP. It may import `ocpi` for wire types, nothing else.
+  Setting `EMSP_BASE_URL` points pushes at a real eMSP and leaves the mock unmounted.
 
 State changes always go through the controller's private `updateX` helper, which does
 **`Upsert` then `Publish…Event`**. One deliberate exception: `session.RecordSessionProgress`
 upserts every tick but publishes only every `SessionUpdateInterval`, because every event becomes
 an OCPI push.
+
+Metering: `charger.meter` is the only place energy is computed. Every path that ends a session
+outside a tick calls `meterSinceLastTick` first, so a bill never depends on where in the tick
+interval the session stopped.
 
 Time: nothing reads the wall clock except `clock.NewScaledGateway`. Controllers expose `Tick()`,
 which advances the simulation by however much *simulated* time passed since the last tick. One

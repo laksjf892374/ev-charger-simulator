@@ -422,6 +422,22 @@ func TestPressStopButton(t *testing.T) {
 		assert.Error(t, err)
 	})
 
+	t.Run("meters the energy delivered since the last tick before stopping", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		seedChargingCharger(t, f, validVehicle)
+		f.clockGateway.Advance(6 * time.Minute)
+		assert.NoError(t, f.chargerController.Tick())
+		f.clockGateway.Advance(36 * time.Second)
+
+		// When
+		_, err := f.chargerController.PressStopButton(validChargerID)
+
+		// Then
+		assert.NoError(t, err)
+		assert.Equal(t, f.sessionController.RecordSessionProgressCalls[1].EnergyDeliveredKWH, 0.5)
+	})
+
 	t.Run("stops the session with the stop button reason", func(t *testing.T) {
 		// Given
 		f := newFixture(t)

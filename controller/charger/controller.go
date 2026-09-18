@@ -421,6 +421,10 @@ func (c *controller) StopCharging(sessionID string) (entity.Session, error) {
 		return entity.Session{}, fmt.Errorf("session %q is not active on charger %q", sessionID, charger.ChargerID)
 	}
 
+	if err := c.meterSinceLastTick(charger); err != nil {
+		return entity.Session{}, fmt.Errorf("meterSinceLastTick: %w", err)
+	}
+
 	stoppedSession, err := c.endSession(&charger, entity.StopReasonRemote, entity.ChargerStateFinishing)
 	if err != nil {
 		return entity.Session{}, fmt.Errorf("endSession: %w", err)
@@ -475,6 +479,10 @@ func (c *controller) PressStopButton(chargerID string) (entity.Charger, error) {
 		return entity.Charger{}, fmt.Errorf("charger %q has no active session: charger state %q", chargerID, charger.State)
 	}
 
+	if err := c.meterSinceLastTick(charger); err != nil {
+		return entity.Charger{}, fmt.Errorf("meterSinceLastTick: %w", err)
+	}
+
 	if _, err := c.endSession(&charger, entity.StopReasonStopButton, entity.ChargerStateFinishing); err != nil {
 		return entity.Charger{}, fmt.Errorf("endSession: %w", err)
 	}
@@ -493,6 +501,12 @@ func (c *controller) InjectFault(chargerID string) (entity.Charger, error) {
 
 	if charger.State == entity.ChargerStateFaulted {
 		return entity.Charger{}, fmt.Errorf("charger %q is already faulted", chargerID)
+	}
+
+	if charger.SessionID != "" {
+		if err := c.meterSinceLastTick(charger); err != nil {
+			return entity.Charger{}, fmt.Errorf("meterSinceLastTick: %w", err)
+		}
 	}
 
 	if err := c.fault(&charger); err != nil {
@@ -598,9 +612,38 @@ func (c *controller) Tick() error {
 }
 
 func (c *controller) advanceCharging(charger entity.Charger, elapsed time.Duration, now time.Time) error {
+	tick, vehicleFull, err := c.meter(charger, elapsed, now)
+	if err != nil {
+		return fmt.Errorf("meter: %w", err)
+	}
+
+	if vehicleFull {
+		if _, err := c.endSession(&charger, entity.StopReasonVehicleFull, entity.ChargerStateFinishing); err != nil {
+			return fmt.Errorf("endSession: %w", err)
+		}
+
+		return nil
+	}
+
+	if tick.Fault {
+		if err := c.fault(&charger); err != nil {
+			return fmt.Errorf("fault: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// meter records the energy the charger delivered over elapsed, and reports what the charger's
+// behaviors decided for this moment.
+func (c *controller) meter(
+	charger entity.Charger,
+	elapsed time.Duration,
+	now time.Time,
+) (behavior.Tick, bool, error) {
 	activeSession, err := c.sessionController.GetSession(charger.SessionID)
 	if err != nil {
-		return fmt.Errorf("sessionController.GetSession: %w", err)
+		return behavior.Tick{}, false, fmt.Errorf("sessionController.GetSession: %w", err)
 	}
 
 	tick := behavior.Tick{
@@ -610,15 +653,7 @@ func (c *controller) advanceCharging(charger entity.Charger, elapsed time.Durati
 		Session:          activeSession,
 	}
 	if err := behavior.ApplyTickInterceptors(charger.Behaviors, &tick); err != nil {
-		return fmt.Errorf("behavior.ApplyTickInterceptors: %w", err)
-	}
-
-	if tick.Fault {
-		if err := c.fault(&charger); err != nil {
-			return fmt.Errorf("fault: %w", err)
-		}
-
-		return nil
+		return behavior.Tick{}, false, fmt.Errorf("behavior.ApplyTickInterceptors: %w", err)
 	}
 
 	// a session that started part-way through this tick has only been charging since it started
@@ -636,15 +671,20 @@ func (c *controller) advanceCharging(charger entity.Charger, elapsed time.Durati
 	}
 
 	if _, err := c.sessionController.RecordSessionProgress(charger.SessionID, energyKWH, powerKW); err != nil {
-		return fmt.Errorf("sessionController.RecordSessionProgress: %w", err)
+		return behavior.Tick{}, false, fmt.Errorf("sessionController.RecordSessionProgress: %w", err)
 	}
 
-	if !vehicleFull {
-		return nil
-	}
+	return tick, vehicleFull, nil
+}
 
-	if _, err := c.endSession(&charger, entity.StopReasonVehicleFull, entity.ChargerStateFinishing); err != nil {
-		return fmt.Errorf("endSession: %w", err)
+// meterSinceLastTick accounts for the energy delivered between the last tick and now. Anything
+// that ends a session outside a tick calls it first, so the bill does not depend on where in the
+// tick interval the session happened to stop.
+func (c *controller) meterSinceLastTick(charger entity.Charger) error {
+	now := c.clockGateway.Now()
+
+	if _, _, err := c.meter(charger, now.Sub(c.lastTickAt), now); err != nil {
+		return fmt.Errorf("meter: %w", err)
 	}
 
 	return nil

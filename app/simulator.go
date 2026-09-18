@@ -19,6 +19,7 @@ import (
 	"cposim/gateway/trace"
 	"cposim/handler/api"
 	ocpihandler "cposim/handler/ocpi"
+	"cposim/mockemsp"
 	"cposim/ocpi"
 	cdrrepo "cposim/repository/cdr"
 	chargerrepo "cposim/repository/charger"
@@ -55,13 +56,25 @@ var defaultVehicle = entity.Vehicle{
 	StateOfCharge:      0.2,
 }
 
+var mockDriverToken = ocpi.Token{
+	ContractID:  "US-EMS-C0001",
+	CountryCode: "US",
+	PartyID:     "EMS",
+	Type:        "APP_USER",
+	UID:         "DRIVER-1",
+}
+
 type Config struct {
 	// Where OCPI pushes are delivered: the base URL of an eMSP's receiver endpoints.
 	EMSPBaseURL string
-	Out         io.Writer
+	// When set, the bundled mock eMSP is mounted in this process. It is this server's own base
+	// URL: the mock reaches the CPO through it, and gives it to the CPO as its callback address.
+	MockEMSPSelfBaseURL string
+	Out                 io.Writer
 }
 
 type Simulator interface {
+	ConnectMockEMSP() error
 	Handler() http.Handler
 	Seed() error
 	Start() error
@@ -72,6 +85,7 @@ type simulator struct {
 	chargerController charger.Controller
 	commandController command.Controller
 	handler           http.Handler
+	mockEMSP          mockemsp.Mock
 	pushGateway       ocpipush.Gateway
 	schedulerGateway  scheduler.Gateway
 }
@@ -187,13 +201,41 @@ func NewSimulatorWithTicker(
 		traceGateway,
 	))
 
+	// The mock eMSP is a guest in this process: it is handed URLs, not controllers.
+	var mockEMSP mockemsp.Mock
+	if config.MockEMSPSelfBaseURL != "" {
+		mockEMSP = mockemsp.NewMock(
+			mockemsp.Config{
+				DriverToken: mockDriverToken,
+				SelfBaseURL: config.MockEMSPSelfBaseURL,
+			},
+			mockemsp.NewHTTPCPOClient(config.MockEMSPSelfBaseURL),
+		)
+		mux.Handle(mockemsp.BasePath+"/", mockEMSP)
+	}
+
 	return &simulator{
 		chargerController: chargerController,
 		commandController: commandController,
 		handler:           mux,
+		mockEMSP:          mockEMSP,
 		pushGateway:       pushGateway,
 		schedulerGateway:  scheduler.NewTickerGateway(newTicker, config.Out),
 	}, nil
+}
+
+// ConnectMockEMSP has the mock eMSP pull the CPO's locations, as a real eMSP does when it first
+// connects. It does nothing when the mock is not mounted.
+func (s *simulator) ConnectMockEMSP() error {
+	if s.mockEMSP == nil {
+		return nil
+	}
+
+	if err := s.mockEMSP.SyncLocations(); err != nil {
+		return fmt.Errorf("mockEMSP.SyncLocations: %w", err)
+	}
+
+	return nil
 }
 
 func (s *simulator) Handler() http.Handler {
