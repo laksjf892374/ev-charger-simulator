@@ -1,18 +1,31 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"cposim/app"
 	"cposim/mockemsp"
 )
 
-const defaultPort = "8080"
+const (
+	defaultPort = "8080"
+
+	// Wall-clock limits on one HTTP exchange, so a slow or stalled client cannot hold a connection
+	// (and its goroutine) open indefinitely.
+	idleTimeout       = 60 * time.Second
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 15 * time.Second
+	shutdownTimeout   = 5 * time.Second
+	writeTimeout      = 30 * time.Second
+)
 
 func main() {
 	if err := run(); err != nil {
@@ -49,9 +62,17 @@ func run() error {
 		return fmt.Errorf("net.Listen: %w", err)
 	}
 
+	server := &http.Server{
+		Handler:           simulator.Handler(),
+		IdleTimeout:       idleTimeout,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+	}
+
 	serveErr := make(chan error, 1)
 	go func() {
-		serveErr <- http.Serve(listener, simulator.Handler())
+		serveErr <- server.Serve(listener)
 	}()
 
 	if err := simulator.Start(); err != nil {
@@ -73,8 +94,16 @@ func run() error {
 
 	select {
 	case err := <-serveErr:
-		return fmt.Errorf("http.Serve: %w", err)
+		return fmt.Errorf("server.Serve: %w", err)
 	case <-interrupted:
+	}
+
+	// stop taking requests and let in-flight ones finish before stopping the world under them
+	shutdownContext, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownContext); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("server.Shutdown: %w", err)
 	}
 
 	if err := simulator.Stop(); err != nil {

@@ -51,6 +51,29 @@ func TestStartScheduledJob(t *testing.T) {
 		assert.Contains(t, out.String(), `Error: job "job": boom`)
 	})
 
+	t.Run("survives a panicking callback, reports it, and runs the next tick", func(t *testing.T) {
+		// Given
+		schedulerGateway, fakeTicker, out := newTickerGateway(t)
+		callbackCount := 0
+		assert.NoError(t, schedulerGateway.StartScheduledJob("job", func() error {
+			callbackCount++
+			if callbackCount == 1 {
+				panic("boom")
+			}
+
+			return nil
+		}))
+
+		// When
+		assert.NoError(t, fakeTicker.Tick())
+		assert.NoError(t, fakeTicker.Tick())
+		assert.NoError(t, schedulerGateway.StopScheduledJob("job"))
+
+		// Then
+		assert.Equal(t, callbackCount, 2)
+		assert.Contains(t, out.String(), `Error: job "job": callback panicked: boom`)
+	})
+
 	t.Run("runs the callback once per tick", func(t *testing.T) {
 		// Given
 		schedulerGateway, fakeTicker, _ := newTickerGateway(t)

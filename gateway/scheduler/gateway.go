@@ -86,11 +86,23 @@ func (g *tickerGateway) run(jobID string, scheduledJob job, callback func() erro
 			return
 		case <-ticker.C():
 			// a background job has nobody to return an error to
-			if err := callback(); err != nil {
+			if err := runCallback(callback); err != nil {
 				fmt.Fprintf(g.out, "Error: job %q: %v\n", jobID, err)
 			}
 		}
 	}
+}
+
+// runCallback turns a panic into an error. One bad tick must not end the job: a simulation whose
+// clock has silently stopped is worse than one that logged an error and carried on.
+func runCallback(callback func() error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("callback panicked: %v", recovered)
+		}
+	}()
+
+	return callback()
 }
 
 // StopScheduledJob blocks until the job goroutine has exited, so no callback runs after it
