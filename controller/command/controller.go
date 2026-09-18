@@ -11,6 +11,7 @@ import (
 	"cposim/gateway/clock"
 	"cposim/gateway/events"
 	"cposim/gateway/identifier"
+	"cposim/gateway/metrics"
 	"cposim/gateway/random"
 	commandrepo "cposim/repository/command"
 )
@@ -61,6 +62,7 @@ type controller struct {
 	config            Config
 	eventsGateway     events.Gateway
 	identifierGateway identifier.Gateway
+	metricsGateway    metrics.Gateway
 	randomGateway     random.Gateway
 	mu                sync.Mutex
 }
@@ -72,6 +74,7 @@ func NewController(
 	config Config,
 	eventsGateway events.Gateway,
 	identifierGateway identifier.Gateway,
+	metricsGateway metrics.Gateway,
 	randomGateway random.Gateway,
 ) (Controller, error) {
 	if config.CommandLatency < 0 {
@@ -93,6 +96,7 @@ func NewController(
 		config:            config,
 		eventsGateway:     eventsGateway,
 		identifierGateway: identifierGateway,
+		metricsGateway:    metricsGateway,
 		randomGateway:     randomGateway,
 	}, nil
 }
@@ -134,6 +138,7 @@ func (c *controller) StartSession(input StartSessionInput) (entity.Command, erro
 	if attempt.Reject {
 		command.Message = attempt.RejectMessage
 		command.State = entity.CommandStateRejected
+		c.metricsGateway.Add(metrics.CommandsRejected, 1)
 	}
 
 	if err := c.updateCommand(command); err != nil {
@@ -281,6 +286,7 @@ func (c *controller) resolveIfDue(command entity.Command, now time.Time) error {
 	command.Message = message
 	command.Result = result
 	command.State = entity.CommandStateResolved
+	c.metricsGateway.Add(metrics.CommandsResolvedPrefix+string(result), 1)
 
 	if err := c.updateCommand(command); err != nil {
 		return fmt.Errorf("updateCommand: %w", err)

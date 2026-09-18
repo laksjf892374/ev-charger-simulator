@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"cposim/behavior"
@@ -18,6 +19,7 @@ import (
 	"cposim/controller/session"
 	"cposim/entity"
 	"cposim/gateway/clock"
+	"cposim/gateway/metrics"
 	"cposim/gateway/trace"
 )
 
@@ -33,10 +35,18 @@ const (
 	maxRequestBodyBytes = 64 * 1024
 )
 
+type Config struct {
+	// Identifies this world. It changes when the simulator is reset, which tells a client holding
+	// state from before (a trace sequence, say) to start over.
+	WorldID string
+}
+
 type handler struct {
 	chargerController charger.Controller
 	clockGateway      clock.Gateway
 	commandController command.Controller
+	config            Config
+	metricsGateway    metrics.Gateway
 	sessionController session.Controller
 	traceGateway      trace.Gateway
 }
@@ -45,6 +55,8 @@ func NewHandler(
 	chargerController charger.Controller,
 	clockGateway clock.Gateway,
 	commandController command.Controller,
+	config Config,
+	metricsGateway metrics.Gateway,
 	sessionController session.Controller,
 	traceGateway trace.Gateway,
 ) http.Handler {
@@ -52,6 +64,8 @@ func NewHandler(
 		chargerController: chargerController,
 		clockGateway:      clockGateway,
 		commandController: commandController,
+		config:            config,
+		metricsGateway:    metricsGateway,
 		sessionController: sessionController,
 		traceGateway:      traceGateway,
 	}
@@ -68,6 +82,7 @@ func NewHandler(
 	mux.HandleFunc("GET "+BasePath+"/clock", h.getClock)
 	mux.HandleFunc("PUT "+BasePath+"/clock", h.updateClock)
 	mux.HandleFunc("GET "+BasePath+"/commands", h.listCommands)
+	mux.HandleFunc("GET "+BasePath+"/metrics", h.getMetrics)
 	mux.HandleFunc("GET "+BasePath+"/sessions", h.listSessions)
 	mux.HandleFunc("GET "+BasePath+"/sites", h.listSites)
 	mux.HandleFunc("POST "+BasePath+"/sites", h.addSite)
@@ -319,6 +334,40 @@ func (h handler) listCommands(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, commands)
 }
 
+// getMetrics serves the process-wide counters plus gauges derived from the current world, so one
+// call answers both "is it healthy?" and "what is in it right now?".
+func (h handler) getMetrics(w http.ResponseWriter, r *http.Request) {
+	state, err := h.stateView(math.MaxInt)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Errorf("stateView: %w", err))
+		return
+	}
+
+	snapshot := h.metricsGateway.Snapshot()
+	snapshot["cdrs_kept"] = int64(len(state.CDRs))
+	snapshot["chargers"] = int64(len(state.Chargers))
+	snapshot["sessions_kept"] = int64(len(state.Sessions))
+	snapshot["sites"] = int64(len(state.Sites))
+
+	for _, viewed := range state.Chargers {
+		snapshot["chargers_"+strings.ToLower(string(viewed.State))]++
+	}
+
+	for _, listedSession := range state.Sessions {
+		if listedSession.State == entity.SessionStateActive {
+			snapshot["sessions_active"]++
+		}
+	}
+
+	for _, listedCommand := range state.Commands {
+		if listedCommand.State == entity.CommandStatePending {
+			snapshot["commands_pending"]++
+		}
+	}
+
+	respond(w, http.StatusOK, snapshot)
+}
+
 func (h handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	sessions, err := h.sessionController.ListSessions()
 	if err != nil {
@@ -364,6 +413,7 @@ type stateView struct {
 	Sessions  []entity.Session `json:"sessions"`
 	Sites     []entity.Site    `json:"sites"`
 	Trace     []trace.Entry    `json:"trace"`
+	WorldID   string           `json:"world_id"`
 }
 
 func (h handler) getState(w http.ResponseWriter, r *http.Request) {
@@ -431,6 +481,7 @@ func (h handler) stateView(sinceSequence int) (stateView, error) {
 		Sessions:  sessions,
 		Sites:     sites,
 		Trace:     h.traceGateway.ListSince(sinceSequence),
+		WorldID:   h.config.WorldID,
 	}, nil
 }
 

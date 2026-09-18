@@ -3,79 +3,31 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"cposim/behavior"
-	"cposim/controller/charger"
-	"cposim/controller/command"
-	"cposim/controller/session"
-	"cposim/entity"
 	"cposim/gateway/clock"
-	"cposim/gateway/identifier"
-	"cposim/gateway/ocpipush"
+	"cposim/gateway/metrics"
 	"cposim/gateway/random"
 	"cposim/gateway/scheduler"
-	"cposim/gateway/trace"
-	"cposim/handler/api"
-	ocpihandler "cposim/handler/ocpi"
-	"cposim/handler/web"
-	"cposim/mockemsp"
-	"cposim/ocpi"
-	cdrrepo "cposim/repository/cdr"
-	chargerrepo "cposim/repository/charger"
-	commandrepo "cposim/repository/command"
-	sessionrepo "cposim/repository/session"
-	siterepo "cposim/repository/site"
 )
 
 const (
-	// All durations below are simulated time unless they say otherwise.
-	advertisedCommandTimeout = 90 * time.Second
-	commandLatency           = 2 * time.Second
-	sessionUpdateInterval    = 30 * time.Second
-	startTimeout             = 60 * time.Second
+	HealthPath = "/healthz"
+	ResetPath  = "/api/reset"
 
-	currency    = "USD"
-	countryCode = "US"
-	partyID     = "SIM"
-	timeZone    = "America/Los_Angeles"
-
-	defaultMaxPowerKW  = 50
-	defaultPricePerKWH = 0.45
-	initialSpeed       = 1
-
-	// Limits that keep a public, unauthenticated, in-memory instance bounded.
-	maxChargers          = 50
-	maxCompletedSessions = 500
-	maxFinishedCommands  = 500
-	maxSites             = 20
-	maxSpeed             = 600
-
-	pushQueueSize     = 1024
+	// Wall time. The simulation is unhealthy once it has not ticked for this long: requests would
+	// still be answered, but time would have stopped.
+	maxTickAge        = 5 * time.Second
 	simulationJobID   = "simulation"
 	tickFrequencyWall = 250 * time.Millisecond
-	traceCapacity     = 500
 )
-
-// A new charger is about as reliable as a real one unless it says otherwise.
-var defaultBehaviors = []entity.BehaviorSpec{{Kind: behavior.KindRealisticReliability}}
-
-var defaultVehicle = entity.Vehicle{
-	BatteryCapacityKWH: 60,
-	MaxPowerKW:         150,
-	StateOfCharge:      0.2,
-}
-
-var mockDriverToken = ocpi.Token{
-	ContractID:  "US-EMS-C0001",
-	CountryCode: "US",
-	PartyID:     "EMS",
-	Type:        "APP_USER",
-	UID:         "DRIVER-1",
-}
 
 type Config struct {
 	// Where OCPI pushes are delivered: the base URL of an eMSP's receiver endpoints.
@@ -89,18 +41,28 @@ type Config struct {
 type Simulator interface {
 	ConnectMockEMSP() error
 	Handler() http.Handler
+	Reset() error
 	Seed() error
 	Start() error
 	Stop() error
 }
 
+// simulator owns what outlives any one world: the HTTP entry point, the tick, logging, metrics
+// and the ability to replace the world.
 type simulator struct {
-	chargerController charger.Controller
-	commandController command.Controller
+	config            Config
+	currentWorld      atomic.Pointer[world]
 	handler           http.Handler
-	mockEMSP          mockemsp.Mock
-	pushGateway       ocpipush.Gateway
+	lastTickWallNanos atomic.Int64
+	logger            *slog.Logger
+	metricsGateway    metrics.Gateway
+	out               io.Writer
+	randomGateway     random.Gateway
+	resetMu           sync.Mutex
 	schedulerGateway  scheduler.Gateway
+	wallNow           clock.NowFunc
+	worldCount        int
+	mu                sync.Mutex
 }
 
 func NewSimulator(config Config) (Simulator, error) {
@@ -118,156 +80,158 @@ func NewSimulatorWithTicker(
 	randomGateway random.Gateway,
 	wallNow clock.NowFunc,
 ) (Simulator, error) {
-	clockGateway, err := clock.NewScaledGateway(maxSpeed, initialSpeed, wallNow)
-	if err != nil {
-		return nil, fmt.Errorf("clock.NewScaledGateway: %w", err)
-	}
+	// several goroutines report through Out: request logging, the tick, the push worker
+	out := &lockedWriter{writer: config.Out}
 
-	chargerRepository := chargerrepo.NewInMemoryRepository()
-	identifierGateway := identifier.NewSequentialGateway()
-	mapper := ocpi.Mapper{
-		CountryCode: countryCode,
-		Currency:    currency,
-		PartyID:     partyID,
-		TimeZone:    timeZone,
+	s := &simulator{
+		config:           config,
+		logger:           slog.New(slog.NewJSONHandler(out, nil)),
+		metricsGateway:   metrics.NewInMemoryGateway(),
+		out:              out,
+		randomGateway:    randomGateway,
+		schedulerGateway: scheduler.NewTickerGateway(newTicker, out),
+		wallNow:          wallNow,
 	}
-	siteRepository := siterepo.NewInMemoryRepository()
-	traceGateway := trace.NewInMemoryGateway(traceCapacity)
+	s.lastTickWallNanos.Store(wallNow().UnixNano())
 
-	pushGateway, err := ocpipush.NewGateway(
-		chargerRepository,
-		ocpipush.Config{
-			EMSPBaseURL: config.EMSPBaseURL,
-			Mapper:      mapper,
-			QueueSize:   pushQueueSize,
-		},
-		config.Out,
-		ocpipush.NewHTTPSender(clockGateway, traceGateway),
-		siteRepository,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("ocpipush.NewGateway: %w", err)
-	}
-
-	sessionController, err := session.NewController(
-		cdrrepo.NewInMemoryRepository(),
-		clockGateway,
-		session.Config{
-			Currency:              currency,
-			MaxCompletedSessions:  maxCompletedSessions,
-			SessionUpdateInterval: sessionUpdateInterval,
-		},
-		pushGateway,
-		identifierGateway,
-		sessionrepo.NewInMemoryRepository(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("session.NewController: %w", err)
-	}
-
-	chargerController, err := charger.NewController(
-		chargerRepository,
-		clockGateway,
-		charger.Config{
-			DefaultBehaviors:   defaultBehaviors,
-			DefaultMaxPowerKW:  defaultMaxPowerKW,
-			DefaultPricePerKWH: defaultPricePerKWH,
-			DefaultVehicle:     defaultVehicle,
-			MaxChargers:        maxChargers,
-			MaxSites:           maxSites,
-		},
-		pushGateway,
-		identifierGateway,
-		randomGateway,
-		sessionController,
-		siteRepository,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("charger.NewController: %w", err)
-	}
-
-	commandController, err := command.NewController(
-		chargerController,
-		clockGateway,
-		commandrepo.NewInMemoryRepository(),
-		command.Config{
-			CommandLatency:      commandLatency,
-			MaxFinishedCommands: maxFinishedCommands,
-			StartTimeout:        startTimeout,
-		},
-		pushGateway,
-		identifierGateway,
-		randomGateway,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("command.NewController: %w", err)
+	if _, err := s.replaceWorld(); err != nil {
+		return nil, fmt.Errorf("replaceWorld: %w", err)
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(api.BasePath+"/", api.NewHandler(
-		chargerController,
-		clockGateway,
-		commandController,
-		sessionController,
-		traceGateway,
-	))
-	mux.Handle(ocpihandler.BasePath+"/", ocpihandler.NewHandler(
-		chargerController,
-		clockGateway,
-		commandController,
-		ocpihandler.Config{
-			CommandTimeout: advertisedCommandTimeout,
-			Mapper:         mapper,
-		},
-		sessionController,
-		traceGateway,
-	))
+	mux.HandleFunc("GET "+HealthPath, s.getHealth)
+	mux.HandleFunc("POST "+ResetPath, s.postReset)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		s.currentWorld.Load().handler.ServeHTTP(w, r)
+	})
+	s.handler = s.logged(mux)
 
-	webHandler, err := web.NewHandler()
-	if err != nil {
-		return nil, fmt.Errorf("web.NewHandler: %w", err)
-	}
-	mux.Handle("/", webHandler)
-
-	// The mock eMSP is a guest in this process: it is handed URLs, not controllers.
-	var mockEMSP mockemsp.Mock
-	if config.MockEMSPSelfBaseURL != "" {
-		mockEMSP = mockemsp.NewMock(
-			mockemsp.Config{
-				DriverToken: mockDriverToken,
-				SelfBaseURL: config.MockEMSPSelfBaseURL,
-			},
-			mockemsp.NewHTTPCPOClient(config.MockEMSPSelfBaseURL),
-		)
-		mux.Handle(mockemsp.BasePath+"/", mockEMSP)
-	}
-
-	return &simulator{
-		chargerController: chargerController,
-		commandController: commandController,
-		handler:           mux,
-		mockEMSP:          mockEMSP,
-		pushGateway:       pushGateway,
-		schedulerGateway:  scheduler.NewTickerGateway(newTicker, config.Out),
-	}, nil
+	return s, nil
 }
 
-// ConnectMockEMSP has the mock eMSP pull the CPO's locations, as a real eMSP does when it first
-// connects. It does nothing when the mock is not mounted.
-func (s *simulator) ConnectMockEMSP() error {
-	if s.mockEMSP == nil {
-		return nil
+type lockedWriter struct {
+	writer io.Writer
+	mu     sync.Mutex
+}
+
+func (w *lockedWriter) Write(data []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	return w.writer.Write(data)
+}
+
+// replaceWorld builds an empty world and makes it current. The previous world, if any, is
+// returned still running, so the caller decides when to stop it.
+func (s *simulator) replaceWorld() (*world, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.worldCount++
+
+	next, err := newWorld(
+		s.config,
+		s.metricsGateway,
+		s.out,
+		s.randomGateway,
+		s.wallNow,
+		fmt.Sprintf("WORLD-%06d", s.worldCount),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("newWorld: %w", err)
 	}
 
-	if err := s.mockEMSP.SyncLocations(); err != nil {
-		return fmt.Errorf("mockEMSP.SyncLocations: %w", err)
+	return s.currentWorld.Swap(next), nil
+}
+
+func (s *simulator) Handler() http.Handler {
+	return s.handler
+}
+
+func (s *simulator) Seed() error {
+	if err := s.currentWorld.Load().seed(); err != nil {
+		return fmt.Errorf("seed: %w", err)
 	}
 
 	return nil
 }
 
-func (s *simulator) Handler() http.Handler {
-	return s.handler
+func (s *simulator) ConnectMockEMSP() error {
+	if err := s.currentWorld.Load().connectMockEMSP(); err != nil {
+		return fmt.Errorf("connectMockEMSP: %w", err)
+	}
+
+	return nil
+}
+
+// Reset replaces the world with a freshly seeded one. The new world becomes current before it is
+// seeded, because seeding pushes to the eMSP, and the bundled mock eMSP is reached through this
+// very server: the pushes must land in the new world's mock, not the old one's.
+func (s *simulator) Reset() error {
+	// one reset at a time, start to finish: two interleaved resets would seed the same world twice
+	s.resetMu.Lock()
+	defer s.resetMu.Unlock()
+
+	previous, err := s.replaceWorld()
+	if err != nil {
+		return fmt.Errorf("replaceWorld: %w", err)
+	}
+
+	previous.pushGateway.Stop()
+
+	if err := s.Seed(); err != nil {
+		return fmt.Errorf("Seed: %w", err)
+	}
+
+	if err := s.ConnectMockEMSP(); err != nil {
+		return fmt.Errorf("ConnectMockEMSP: %w", err)
+	}
+
+	s.metricsGateway.Add(metrics.WorldResets, 1)
+
+	return nil
+}
+
+func (s *simulator) postReset(w http.ResponseWriter, r *http.Request) {
+	if err := s.Reset(); err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("Reset: %v", err)})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"world_id": s.currentWorld.Load().worldID})
+}
+
+func respondJSON(w http.ResponseWriter, httpStatus int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpStatus)
+
+	// an encode failure here means the client went away; there is nobody left to tell
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+type healthView struct {
+	LastTickAgeMillis int64  `json:"last_tick_age_ms"`
+	Status            string `json:"status"`
+	WorldID           string `json:"world_id"`
+}
+
+// getHealth reports on the simulation, not just the HTTP server: a process whose tick has died
+// still answers requests, and would otherwise look healthy forever.
+func (s *simulator) getHealth(w http.ResponseWriter, r *http.Request) {
+	lastTickAge := s.wallNow().Sub(time.Unix(0, s.lastTickWallNanos.Load()))
+	health := healthView{
+		LastTickAgeMillis: lastTickAge.Milliseconds(),
+		Status:            "ok",
+		WorldID:           s.currentWorld.Load().worldID,
+	}
+
+	if lastTickAge > maxTickAge {
+		health.Status = "simulation clock has stopped"
+		respondJSON(w, http.StatusServiceUnavailable, health)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, health)
 }
 
 func (s *simulator) Start() error {
@@ -278,15 +242,18 @@ func (s *simulator) Start() error {
 	return nil
 }
 
-// tick resolves commands before advancing chargers, so a session started in this tick is
-// metered from its own start rather than from the previous tick.
 func (s *simulator) tick() error {
-	if err := s.commandController.Tick(); err != nil {
-		return fmt.Errorf("commandController.Tick: %w", err)
-	}
+	startedAt := s.wallNow()
+	err := s.currentWorld.Load().tick()
+	finishedAt := s.wallNow()
 
-	if err := s.chargerController.Tick(); err != nil {
-		return fmt.Errorf("chargerController.Tick: %w", err)
+	s.lastTickWallNanos.Store(finishedAt.UnixNano())
+	s.metricsGateway.Add(metrics.Ticks, 1)
+	s.metricsGateway.Set(metrics.LastTickDurationMicros, finishedAt.Sub(startedAt).Microseconds())
+
+	if err != nil {
+		s.metricsGateway.Add(metrics.TickErrors, 1)
+		return fmt.Errorf("tick: %w", err)
 	}
 
 	return nil
@@ -297,7 +264,7 @@ func (s *simulator) Stop() error {
 		return fmt.Errorf("schedulerGateway.StopScheduledJob: %w", err)
 	}
 
-	s.pushGateway.Stop()
+	s.currentWorld.Load().pushGateway.Stop()
 
 	return nil
 }

@@ -9,9 +9,9 @@ import (
 	"cposim/entity"
 )
 
-// Seed creates the demo world. It goes through the controllers like any other caller, so the
+// seed creates the demo world. It goes through the controllers like any other caller, so the
 // eMSP hears about the seeded sites and chargers the same way it hears about later ones.
-func (s *simulator) Seed() error {
+func (w *world) seed() error {
 	seededSites := []struct {
 		chargers []charger.AddChargerInput
 		site     entity.Site
@@ -53,7 +53,7 @@ func (s *simulator) Seed() error {
 	}
 
 	for _, seeded := range seededSites {
-		addedSite, err := s.chargerController.AddSite(seeded.site)
+		addedSite, err := w.chargerController.AddSite(seeded.site)
 		if err != nil {
 			return fmt.Errorf("chargerController.AddSite: %w", err)
 		}
@@ -61,7 +61,7 @@ func (s *simulator) Seed() error {
 		for _, input := range seeded.chargers {
 			input.SiteID = addedSite.SiteID
 
-			if _, err := s.chargerController.AddCharger(input); err != nil {
+			if _, err := w.chargerController.AddCharger(input); err != nil {
 				return fmt.Errorf("chargerController.AddCharger: %w", err)
 			}
 		}

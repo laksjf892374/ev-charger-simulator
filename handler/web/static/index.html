@@ -188,6 +188,7 @@ input[type=number]{width:84px}
       <span class="seg" role="group" aria-label="Simulation speed">
         <button data-speed="1">1×</button><button data-speed="10">10×</button><button data-speed="60">60×</button>
       </span>
+      <button class="btn small" id="reset" title="Throw this world away and start again from the demo data">Reset</button>
     </div>
   </header>
 
@@ -318,7 +319,7 @@ input[type=number]{width:84px}
   var CABLE = "M56 56 C 78 104, 100 100, 120 66";
 
   var cpo = null, emsp = null, lastSequence = 0, messageCount = 0;
-  var editingChargerID = null;
+  var editingChargerID = null, worldID = null;
   var done = {plugged: false, started: false, billed: false, tweaked: false};
 
   function $(id) { return document.getElementById(id); }
@@ -528,6 +529,8 @@ input[type=number]{width:84px}
     act(call("POST", "/api/chargers", input)).then(closeAddForm);
   });
 
+  $("reset").addEventListener("click", function () { act(call("POST", "/api/reset")); });
+
   document.querySelectorAll("[data-speed]").forEach(function (button) {
     button.addEventListener("click", function () { act(call("PUT", "/api/clock", {speed: parseFloat(button.dataset.speed)})); });
   });
@@ -674,6 +677,9 @@ input[type=number]{width:84px}
     ]).then(function (results) {
       cpo = results[0];
       emsp = results[1];
+      // a different world means everything this page remembers (trace position, checklist) is stale
+      if (worldID && cpo.world_id !== worldID) { window.location.reload(); return; }
+      worldID = cpo.world_id;
       if (cpo.trace.length) {
         lastSequence = cpo.trace[cpo.trace.length - 1].sequence;
         appendMessages(cpo.trace);

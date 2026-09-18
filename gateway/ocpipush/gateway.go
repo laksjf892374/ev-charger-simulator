@@ -11,6 +11,7 @@ import (
 
 	"cposim/entity"
 	"cposim/gateway/events"
+	"cposim/gateway/metrics"
 	"cposim/gateway/trace"
 	"cposim/ocpi"
 	chargerrepo "cposim/repository/charger"
@@ -33,6 +34,7 @@ type Gateway interface {
 type pushGateway struct {
 	chargerRepository chargerrepo.Repository
 	config            Config
+	metricsGateway    metrics.Gateway
 	out               io.Writer
 	queue             chan func() Push
 	sender            Sender
@@ -45,6 +47,7 @@ type pushGateway struct {
 func NewGateway(
 	chargerRepository chargerrepo.Repository,
 	config Config,
+	metricsGateway metrics.Gateway,
 	out io.Writer,
 	sender Sender,
 	siteRepository siterepo.Repository,
@@ -62,6 +65,7 @@ func NewGateway(
 	gateway := &pushGateway{
 		chargerRepository: chargerRepository,
 		config:            config,
+		metricsGateway:    metricsGateway,
 		out:               out,
 		queue:             make(chan func() Push, config.QueueSize),
 		sender:            sender,
@@ -84,10 +88,16 @@ func (g *pushGateway) run() {
 		case <-g.stop:
 			return
 		case buildPush := <-g.queue:
+			g.metricsGateway.Set(metrics.PushQueueDepth, int64(len(g.queue)))
+
 			push := buildPush()
 			if err := g.sender.Send(push); err != nil {
+				g.metricsGateway.Add(metrics.PushesFailed, 1)
 				fmt.Fprintf(g.out, "Error: sender.Send %s %s: %v\n", push.Method, push.URL, err)
+				continue
 			}
+
+			g.metricsGateway.Add(metrics.PushesSent, 1)
 		}
 	}
 }
@@ -105,7 +115,9 @@ func (g *pushGateway) Stop() {
 func (g *pushGateway) enqueue(description string, buildPush func() Push) error {
 	select {
 	case g.queue <- buildPush:
+		g.metricsGateway.Set(metrics.PushQueueDepth, int64(len(g.queue)))
 	default:
+		g.metricsGateway.Add(metrics.PushesDropped, 1)
 		fmt.Fprintf(g.out, "Error: push queue is full, dropped %s\n", description)
 	}
 

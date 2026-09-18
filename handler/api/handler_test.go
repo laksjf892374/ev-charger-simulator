@@ -14,6 +14,7 @@ import (
 	"cposim/controller/session"
 	"cposim/entity"
 	"cposim/gateway/clock"
+	"cposim/gateway/metrics"
 	"cposim/gateway/trace"
 	"cposim/handler/api"
 )
@@ -24,6 +25,7 @@ type fixture struct {
 	chargerController *charger.FakeController
 	clockGateway      *clock.FakeGateway
 	handler           http.Handler
+	metricsGateway    metrics.Gateway
 	sessionController *session.FakeController
 	traceGateway      *trace.FakeGateway
 }
@@ -34,6 +36,7 @@ func newFixture(t *testing.T) fixture {
 	chargerController := charger.NewFakeController()
 	chargerController.GetChargerResult = entity.Charger{ChargerID: validChargerID}
 	clockGateway := clock.NewFakeGateway()
+	metricsGateway := metrics.NewInMemoryGateway()
 	sessionController := session.NewFakeController()
 	traceGateway := trace.NewFakeGateway()
 
@@ -44,9 +47,12 @@ func newFixture(t *testing.T) fixture {
 			chargerController,
 			clockGateway,
 			command.NewFakeController(),
+			api.Config{WorldID: "WORLD-1"},
+			metricsGateway,
 			sessionController,
 			traceGateway,
 		),
+		metricsGateway:    metricsGateway,
 		sessionController: sessionController,
 		traceGateway:      traceGateway,
 	}
@@ -285,5 +291,36 @@ func TestGetState(t *testing.T) {
 		assert.Contains(t, string(state["trace"]), "something happened")
 		assert.Contains(t, string(state["behaviors"]), "fault_mid_session")
 		assert.Contains(t, string(state["clock"]), `"speed":1`)
+		assert.Equal(t, string(state["world_id"]), `"WORLD-1"`)
+	})
+}
+
+func TestGetMetrics(t *testing.T) {
+	t.Run("serves the counters together with gauges derived from the world", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		f.metricsGateway.Add(metrics.PushesSent, 12)
+		f.chargerController.ListChargersResult = []entity.Charger{
+			{ChargerID: "A", State: entity.ChargerStateCharging},
+			{ChargerID: "B", State: entity.ChargerStateAvailable},
+			{ChargerID: "C", State: entity.ChargerStateAvailable},
+		}
+		f.sessionController.ListSessionsResult = []entity.Session{
+			{SessionID: "SES-1", State: entity.SessionStateActive},
+			{SessionID: "SES-2", State: entity.SessionStateCompleted},
+		}
+
+		// When
+		recorder := serve(t, f, http.MethodGet, "/api/metrics", "")
+
+		// Then
+		assert.Equal(t, recorder.Code, http.StatusOK)
+		served := decodeBody[map[string]int64](t, recorder)
+		assert.Equal(t, served[metrics.PushesSent], int64(12))
+		assert.Equal(t, served["chargers"], int64(3))
+		assert.Equal(t, served["chargers_available"], int64(2))
+		assert.Equal(t, served["chargers_charging"], int64(1))
+		assert.Equal(t, served["sessions_active"], int64(1))
+		assert.Equal(t, served["sessions_kept"], int64(2))
 	})
 }

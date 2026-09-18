@@ -13,6 +13,7 @@ import (
 	"cposim/gateway/clock"
 	"cposim/gateway/events"
 	"cposim/gateway/identifier"
+	"cposim/gateway/metrics"
 	"cposim/gateway/random"
 	commandrepo "cposim/repository/command"
 )
@@ -47,6 +48,7 @@ type fixture struct {
 	clockGateway      *clock.FakeGateway
 	commandController command.Controller
 	eventsGateway     *events.FakeGateway
+	metricsGateway    metrics.Gateway
 	randomGateway     *random.FakeGateway
 }
 
@@ -58,6 +60,7 @@ func newFixture(t *testing.T) fixture {
 	chargerController.StartChargingResult = entity.Session{SessionID: validSessionID}
 	clockGateway := clock.NewFakeGateway()
 	eventsGateway := events.NewFakeGateway()
+	metricsGateway := metrics.NewInMemoryGateway()
 	randomGateway := random.NewFakeGateway()
 	commandController, err := command.NewController(
 		chargerController,
@@ -66,6 +69,7 @@ func newFixture(t *testing.T) fixture {
 		validConfig,
 		eventsGateway,
 		identifier.NewSequentialGateway(),
+		metricsGateway,
 		randomGateway,
 	)
 	assert.NoError(t, err)
@@ -75,6 +79,7 @@ func newFixture(t *testing.T) fixture {
 		clockGateway:      clockGateway,
 		commandController: commandController,
 		eventsGateway:     eventsGateway,
+		metricsGateway:    metricsGateway,
 		randomGateway:     randomGateway,
 	}
 }
@@ -95,7 +100,7 @@ func TestNewController(t *testing.T) {
 		config.StartTimeout = 0
 
 		// When
-		_, err := command.NewController(nil, nil, nil, config, nil, nil, nil)
+		_, err := command.NewController(nil, nil, nil, config, nil, nil, nil, nil)
 
 		// Then
 		assert.Error(t, err)
@@ -339,6 +344,7 @@ func TestTick(t *testing.T) {
 		// Then
 		assert.NoError(t, err)
 		assert.Equal(t, lastCommandEvent(t, f).Result, entity.CommandResultTimeout)
+		assert.Equal(t, f.metricsGateway.Snapshot()[metrics.CommandsResolvedPrefix+"TIMEOUT"], int64(1))
 	})
 
 	t.Run("starts charging once the driver plugs in while the start is waiting", func(t *testing.T) {

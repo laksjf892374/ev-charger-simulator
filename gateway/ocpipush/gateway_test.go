@@ -8,6 +8,7 @@ import (
 
 	"cposim/assert"
 	"cposim/entity"
+	"cposim/gateway/metrics"
 	"cposim/gateway/ocpipush"
 	"cposim/ocpi"
 	chargerrepo "cposim/repository/charger"
@@ -23,14 +24,16 @@ var validConfig = ocpipush.Config{
 }
 
 type fixture struct {
-	out         *bytes.Buffer
-	pushGateway ocpipush.Gateway
-	sender      *ocpipush.FakeSender
+	metricsGateway metrics.Gateway
+	out            *bytes.Buffer
+	pushGateway    ocpipush.Gateway
+	sender         *ocpipush.FakeSender
 }
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 
+	metricsGateway := metrics.NewInMemoryGateway()
 	out := &bytes.Buffer{}
 	sender := ocpipush.NewFakeSender()
 	siteRepository := siterepo.NewInMemoryRepository()
@@ -39,6 +42,7 @@ func newFixture(t *testing.T) fixture {
 	pushGateway, err := ocpipush.NewGateway(
 		chargerrepo.NewInMemoryRepository(),
 		validConfig,
+		metricsGateway,
 		out,
 		sender,
 		siteRepository,
@@ -47,9 +51,10 @@ func newFixture(t *testing.T) fixture {
 	t.Cleanup(pushGateway.Stop)
 
 	return fixture{
-		out:         out,
-		pushGateway: pushGateway,
-		sender:      sender,
+		metricsGateway: metricsGateway,
+		out:            out,
+		pushGateway:    pushGateway,
+		sender:         sender,
 	}
 }
 
@@ -60,7 +65,7 @@ func TestNewGateway(t *testing.T) {
 		config.EMSPBaseURL = ""
 
 		// When
-		_, err := ocpipush.NewGateway(nil, config, nil, nil, nil)
+		_, err := ocpipush.NewGateway(nil, config, nil, nil, nil, nil)
 
 		// Then
 		assert.Error(t, err)
@@ -72,7 +77,7 @@ func TestNewGateway(t *testing.T) {
 		config.QueueSize = 0
 
 		// When
-		_, err := ocpipush.NewGateway(nil, config, nil, nil, nil)
+		_, err := ocpipush.NewGateway(nil, config, nil, nil, nil, nil)
 
 		// Then
 		assert.Error(t, err)
@@ -212,5 +217,7 @@ func TestDelivery(t *testing.T) {
 		assert.Equal(t, pushes[1].URL, validEMSPBaseURL+"/sessions/US/SIM/SES-2")
 		f.pushGateway.Stop()
 		assert.Contains(t, f.out.String(), "Error: sender.Send PUT")
+		assert.Equal(t, f.metricsGateway.Snapshot()[metrics.PushesFailed], int64(2))
+		assert.Equal(t, f.metricsGateway.Snapshot()[metrics.PushesSent], int64(0))
 	})
 }
