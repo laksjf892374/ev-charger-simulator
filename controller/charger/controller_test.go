@@ -585,6 +585,21 @@ func TestTick(t *testing.T) {
 		}})
 	})
 
+	t.Run("meters a session only from its start when it began after the previous tick", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		f.clockGateway.Advance(time.Hour)
+		seedChargingCharger(t, f, validVehicle)
+		f.clockGateway.Advance(6 * time.Minute)
+
+		// When
+		err := f.chargerController.Tick()
+
+		// Then
+		assert.NoError(t, err)
+		assert.Equal(t, f.sessionController.RecordSessionProgressCalls[0].EnergyDeliveredKWH, 5.0)
+	})
+
 	t.Run("tapers power once the vehicle is above 80% state of charge", func(t *testing.T) {
 		// Given
 		f := newFixture(t)

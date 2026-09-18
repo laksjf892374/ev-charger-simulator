@@ -6,8 +6,13 @@ import (
 	"cposim/entity"
 )
 
-// FakeController covers what collaborating controllers call. The physical actions only record
-// their charger ID; extend it when a test needs more.
+type PhysicalActionCall struct {
+	Action    string
+	ChargerID string
+}
+
+// FakeController records every charger mutation other than start/stop/unlock as a
+// PhysicalActionCall named after the method, and answers them all with GetChargerResult.
 type FakeController struct {
 	GetChargerCalledWith      []string
 	GetChargerErr             error
@@ -18,7 +23,7 @@ type FakeController struct {
 	ListChargersResult        []entity.Charger
 	ListSitesErr              error
 	ListSitesResult           []entity.Site
-	PhysicalActionCalledWith  []string
+	PhysicalActionCalls       []PhysicalActionCall
 	PhysicalActionErr         error
 	StartChargingCalledWith   []StartChargingInput
 	StartChargingErr          error
@@ -38,24 +43,30 @@ func NewFakeController() *FakeController {
 }
 
 func (c *FakeController) AddCharger(input AddChargerInput) (entity.Charger, error) {
-	return c.recordPhysicalAction(input.ChargerID)
+	return c.recordPhysicalAction("AddCharger", input.ChargerID)
 }
 
-func (c *FakeController) recordPhysicalAction(chargerID string) (entity.Charger, error) {
+func (c *FakeController) recordPhysicalAction(action string, chargerID string) (entity.Charger, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.PhysicalActionCalledWith = append(c.PhysicalActionCalledWith, chargerID)
+	c.PhysicalActionCalls = append(c.PhysicalActionCalls, PhysicalActionCall{
+		Action:    action,
+		ChargerID: chargerID,
+	})
 
 	return c.GetChargerResult, c.PhysicalActionErr
 }
 
 func (c *FakeController) AddSite(site entity.Site) (entity.Site, error) {
-	return site, nil
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return site, c.PhysicalActionErr
 }
 
 func (c *FakeController) ClearFault(chargerID string) (entity.Charger, error) {
-	return c.recordPhysicalAction(chargerID)
+	return c.recordPhysicalAction("ClearFault", chargerID)
 }
 
 func (c *FakeController) GetCharger(chargerID string) (entity.Charger, error) {
@@ -75,7 +86,7 @@ func (c *FakeController) GetSite(siteID string) (entity.Site, error) {
 }
 
 func (c *FakeController) InjectFault(chargerID string) (entity.Charger, error) {
-	return c.recordPhysicalAction(chargerID)
+	return c.recordPhysicalAction("InjectFault", chargerID)
 }
 
 func (c *FakeController) ListChargers() ([]entity.Charger, error) {
@@ -93,15 +104,15 @@ func (c *FakeController) ListSites() ([]entity.Site, error) {
 }
 
 func (c *FakeController) PlugIn(chargerID string, vehicle entity.Vehicle) (entity.Charger, error) {
-	return c.recordPhysicalAction(chargerID)
+	return c.recordPhysicalAction("PlugIn", chargerID)
 }
 
 func (c *FakeController) PressStopButton(chargerID string) (entity.Charger, error) {
-	return c.recordPhysicalAction(chargerID)
+	return c.recordPhysicalAction("PressStopButton", chargerID)
 }
 
 func (c *FakeController) RemoveCharger(chargerID string) error {
-	_, err := c.recordPhysicalAction(chargerID)
+	_, err := c.recordPhysicalAction("RemoveCharger", chargerID)
 
 	return err
 }
@@ -143,9 +154,9 @@ func (c *FakeController) UnlockConnector(chargerID string) (entity.Charger, erro
 }
 
 func (c *FakeController) Unplug(chargerID string) (entity.Charger, error) {
-	return c.recordPhysicalAction(chargerID)
+	return c.recordPhysicalAction("Unplug", chargerID)
 }
 
 func (c *FakeController) UpdateBehaviors(chargerID string, behaviors []entity.BehaviorSpec) (entity.Charger, error) {
-	return c.recordPhysicalAction(chargerID)
+	return c.recordPhysicalAction("UpdateBehaviors", chargerID)
 }

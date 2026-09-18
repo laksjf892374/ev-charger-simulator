@@ -1,0 +1,71 @@
+package app
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"cposim/behavior"
+	"cposim/controller/charger"
+	"cposim/entity"
+)
+
+// Seed creates the demo world. It goes through the controllers like any other caller, so the
+// eMSP hears about the seeded sites and chargers the same way it hears about later ones.
+func (s *simulator) Seed() error {
+	seededSites := []struct {
+		chargers []charger.AddChargerInput
+		site     entity.Site
+	}{
+		{
+			chargers: []charger.AddChargerInput{
+				{MaxPowerKW: 150, PricePerKWH: 0.55},
+				{MaxPowerKW: 50},
+			},
+			site: entity.Site{
+				Address:     "1 Broadway",
+				City:        "Oakland",
+				CountryCode: "USA",
+				Latitude:    37.7955,
+				Longitude:   -122.2764,
+				Name:        "Downtown Fast Charging Hub",
+			},
+		},
+		{
+			chargers: []charger.AddChargerInput{
+				{
+					Behaviors: []entity.BehaviorSpec{{
+						Kind:   behavior.KindStartFails,
+						Params: json.RawMessage(`{"delay_s": 8}`),
+					}},
+					MaxPowerKW:  11,
+					PricePerKWH: 0.32,
+				},
+			},
+			site: entity.Site{
+				Address:     "2100 Shattuck Ave",
+				City:        "Berkeley",
+				CountryCode: "USA",
+				Latitude:    37.8703,
+				Longitude:   -122.2680,
+				Name:        "Shattuck Parking Garage",
+			},
+		},
+	}
+
+	for _, seeded := range seededSites {
+		addedSite, err := s.chargerController.AddSite(seeded.site)
+		if err != nil {
+			return fmt.Errorf("chargerController.AddSite: %w", err)
+		}
+
+		for _, input := range seeded.chargers {
+			input.SiteID = addedSite.SiteID
+
+			if _, err := s.chargerController.AddCharger(input); err != nil {
+				return fmt.Errorf("chargerController.AddCharger: %w", err)
+			}
+		}
+	}
+
+	return nil
+}

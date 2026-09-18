@@ -82,7 +82,10 @@ func TestFakeController(t *testing.T) {
 		assert.Equal(t, sites, []entity.Site{{SiteID: "SITE-9"}})
 		assert.Equal(t, gotCharger, entity.Charger{ChargerID: "CH-1"})
 		assert.Equal(t, fakeController.GetChargerCalledWith, []string{"CH-1"})
-		assert.Equal(t, fakeController.PhysicalActionCalledWith, []string{"CH-2"})
+		assert.Equal(t, fakeController.PhysicalActionCalls, []charger.PhysicalActionCall{{
+			Action:    "PlugIn",
+			ChargerID: "CH-2",
+		}})
 		assert.Equal(t, startedSession, entity.Session{SessionID: "SES-1"})
 		assert.Equal(t, fakeController.StartChargingCalledWith, []charger.StartChargingInput{{ChargerID: "CH-1"}})
 		assert.Equal(t, stoppedSession, entity.Session{SessionID: "SES-2"})

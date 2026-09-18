@@ -188,6 +188,10 @@ func (c *controller) AddCharger(input AddChargerInput) (entity.Charger, error) {
 		return entity.Charger{}, fmt.Errorf("max power and price must not be negative")
 	}
 
+	if input.Behaviors == nil {
+		input.Behaviors = []entity.BehaviorSpec{}
+	}
+
 	charger := entity.Charger{
 		Behaviors:   input.Behaviors,
 		ChargerID:   input.ChargerID,
@@ -617,10 +621,13 @@ func (c *controller) advanceCharging(charger entity.Charger, elapsed time.Durati
 		return nil
 	}
 
+	// a session that started part-way through this tick has only been charging since it started
+	chargingElapsed := min(elapsed, tick.ChargingDuration)
+
 	vehicle := *charger.Vehicle
 	stateOfCharge := stateOfChargeAfter(vehicle, activeSession.EnergyDeliveredKWH)
 	powerKW := deliveredPowerKW(charger, vehicle, stateOfCharge) * tick.PowerFactor
-	energyKWH := powerKW * elapsed.Hours()
+	energyKWH := powerKW * chargingElapsed.Hours()
 
 	remainingKWH := (1 - stateOfCharge) * vehicle.BatteryCapacityKWH
 	vehicleFull := energyKWH >= remainingKWH

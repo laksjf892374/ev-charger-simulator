@@ -32,7 +32,7 @@ func NewScaledGateway(
 		return nil, fmt.Errorf("speed must be positive: speed %v", speed)
 	}
 
-	startedAt := wallNow()
+	startedAt := wallNow().UTC()
 
 	return &scaledGateway{
 		simulatedAnchor: startedAt,
