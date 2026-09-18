@@ -11,6 +11,7 @@ import (
 
 	"cposim/entity"
 	"cposim/gateway/events"
+	"cposim/gateway/trace"
 	"cposim/ocpi"
 	chargerrepo "cposim/repository/charger"
 	siterepo "cposim/repository/site"
@@ -120,6 +121,7 @@ func (g *pushGateway) PublishCDREvent(cdr entity.CDR) error {
 		return Push{
 			Body:   g.config.Mapper.CDR(cdr, site, charger),
 			Method: http.MethodPost,
+			Module: trace.ModuleCDRs,
 			Summary: fmt.Sprintf(
 				"CPO sends the final bill (CDR) for session %s: %.2f kWh, %.2f %s",
 				cdr.SessionID, cdr.EnergyDeliveredKWH, cdr.TotalCost, cdr.Currency,
@@ -136,6 +138,7 @@ func (g *pushGateway) PublishChargerEvent(charger entity.Charger) error {
 		return Push{
 			Body:    evse,
 			Method:  http.MethodPut,
+			Module:  trace.ModuleLocations,
 			Summary: fmt.Sprintf("CPO tells the eMSP that charger %s is now %s", charger.ChargerID, evse.Status),
 			URL:     g.evseURL(charger),
 		}
@@ -155,6 +158,7 @@ func (g *pushGateway) PublishChargerRemovedEvent(charger entity.Charger) error {
 		return Push{
 			Body:    g.config.Mapper.RemovedEVSE(charger),
 			Method:  http.MethodPut,
+			Module:  trace.ModuleLocations,
 			Summary: fmt.Sprintf("CPO tells the eMSP that charger %s has been REMOVED", charger.ChargerID),
 			URL:     g.evseURL(charger),
 		}
@@ -172,6 +176,7 @@ func (g *pushGateway) PublishCommandEvent(command entity.Command) error {
 		return Push{
 			Body:   g.config.Mapper.CommandResult(command),
 			Method: http.MethodPost,
+			Module: trace.ModuleCommands,
 			Summary: fmt.Sprintf(
 				"CPO reports the outcome of %s (%s): %s",
 				command.Kind, command.CommandID, command.Result,
@@ -186,6 +191,7 @@ func (g *pushGateway) PublishSessionEvent(session entity.Session) error {
 		return Push{
 			Body:   g.config.Mapper.Session(session),
 			Method: http.MethodPut,
+			Module: trace.ModuleSessions,
 			Summary: fmt.Sprintf(
 				"CPO updates session %s: %s, %.2f kWh delivered so far",
 				session.SessionID, session.State, session.EnergyDeliveredKWH,
@@ -200,6 +206,7 @@ func (g *pushGateway) PublishSiteEvent(site entity.Site) error {
 		return Push{
 			Body:    g.config.Mapper.Location(site, nil),
 			Method:  http.MethodPut,
+			Module:  trace.ModuleLocations,
 			Summary: fmt.Sprintf("CPO announces a new location %q (%s)", site.Name, site.SiteID),
 			URL:     g.partyURL("locations") + "/" + site.SiteID,
 		}

@@ -61,6 +61,7 @@ func TestSend(t *testing.T) {
 		err := sender.Send(ocpipush.Push{
 			Body:    map[string]string{"status": "CHARGING"},
 			Method:  http.MethodPut,
+			Module:  trace.ModuleLocations,
 			Summary: "charger is now CHARGING",
 			URL:     server.URL + "/locations/US/SIM/SITE-1/EVSE-1",
 		})
@@ -73,6 +74,7 @@ func TestSend(t *testing.T) {
 		assert.Equal(t, traceGateway.Recorded(), []trace.Entry{{
 			Direction:    trace.DirectionOutbound,
 			Method:       http.MethodPut,
+			Module:       trace.ModuleLocations,
 			RecordedAt:   clockGateway.Now(),
 			RequestBody:  `{"status":"CHARGING"}`,
 			ResponseBody: `{"status_code":1000}`,

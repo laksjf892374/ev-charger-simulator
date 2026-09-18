@@ -437,6 +437,7 @@ func TestTracing(t *testing.T) {
 		assert.Equal(t, entryCount, 1)
 		assert.Equal(t, entries[0].Direction, trace.DirectionInbound)
 		assert.Equal(t, entries[0].Method, http.MethodPost)
+		assert.Equal(t, entries[0].Module, trace.ModuleCommands)
 		assert.Equal(t, entries[0].URL, "/ocpi/cpo/2.2.1/commands/START_SESSION")
 		assert.Equal(t, entries[0].StatusCode, http.StatusOK)
 		assert.Equal(t, entries[0].RequestBody, body)

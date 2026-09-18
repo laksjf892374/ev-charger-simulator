@@ -13,6 +13,7 @@ import (
 
 	"cposim/app"
 	"cposim/assert"
+	"cposim/gateway/random"
 	"cposim/gateway/scheduler"
 )
 
@@ -22,6 +23,14 @@ const (
 	validFlakySiteID    = "SITE-000002"
 	validHubSiteID      = "SITE-000001"
 )
+
+// luckyRandomGateway keeps the seeded, realistically reliable chargers from failing at random.
+func luckyRandomGateway() *random.FakeGateway {
+	randomGateway := random.NewFakeGateway()
+	randomGateway.Float64Result = 0.999
+
+	return randomGateway
+}
 
 type wallClock struct {
 	now time.Time
@@ -59,6 +68,7 @@ func newFixture(t *testing.T) fixture {
 	simulator, err := app.NewSimulatorWithTicker(
 		app.Config{EMSPBaseURL: fakeEMSP.URL + "/ocpi/2.2.1", Out: &bytes.Buffer{}},
 		func() scheduler.Ticker { return fakeTicker },
+		luckyRandomGateway(),
 		clock.Now,
 	)
 	assert.NoError(t, err)

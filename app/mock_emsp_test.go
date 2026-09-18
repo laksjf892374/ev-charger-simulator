@@ -37,6 +37,7 @@ func newMockEMSPFixture(t *testing.T) fixture {
 			Out:                 &bytes.Buffer{},
 		},
 		func() scheduler.Ticker { return fakeTicker },
+		luckyRandomGateway(),
 		clock.Now,
 	)
 	assert.NoError(t, err)

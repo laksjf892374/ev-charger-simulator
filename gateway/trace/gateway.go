@@ -8,13 +8,21 @@ import (
 const (
 	DirectionInbound  = "EMSP_TO_CPO"
 	DirectionOutbound = "CPO_TO_EMSP"
+
+	ModuleCDRs      = "cdrs"
+	ModuleCommands  = "commands"
+	ModuleLocations = "locations"
+	ModuleSessions  = "sessions"
+	ModuleVersions  = "versions"
 )
 
 // Entry is one OCPI exchange as seen from the CPO, with a plain-English summary so that someone
 // who has never read the OCPI spec can follow along.
 type Entry struct {
-	Direction    string    `json:"direction"`
-	Method       string    `json:"method"`
+	Direction string `json:"direction"`
+	Method    string `json:"method"`
+	// The OCPI module the exchange belongs to: locations, sessions, cdrs, commands or versions.
+	Module       string    `json:"module"`
 	RecordedAt   time.Time `json:"recorded_at"`
 	RequestBody  string    `json:"request_body,omitempty"`
 	ResponseBody string    `json:"response_body,omitempty"`

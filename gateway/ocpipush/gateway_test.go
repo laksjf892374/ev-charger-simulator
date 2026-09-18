@@ -190,6 +190,7 @@ func TestPublishCDREvent(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, pushes[0].Method, http.MethodPost)
 		assert.Equal(t, pushes[0].URL, validEMSPBaseURL+"/cdrs")
+		assert.Equal(t, pushes[0].Module, "cdrs")
 		assert.Equal(t, pushes[0].Body.(ocpi.CDR).CDRLocation.Name, "Oakland Hub")
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"cposim/gateway/trace"
 )
@@ -30,6 +31,7 @@ func (h handler) traced(next http.Handler) http.Handler {
 		h.traceGateway.Record(trace.Entry{
 			Direction:    trace.DirectionInbound,
 			Method:       r.Method,
+			Module:       moduleOf(r.URL.Path),
 			RecordedAt:   h.clockGateway.Now(),
 			RequestBody:  string(requestBody),
 			ResponseBody: recorder.body.String(),
@@ -38,6 +40,19 @@ func (h handler) traced(next http.Handler) http.Handler {
 			URL:          r.URL.RequestURI(),
 		})
 	})
+}
+
+// moduleOf names the OCPI module a path belongs to; anything outside the module tree is part of
+// version negotiation.
+func moduleOf(path string) string {
+	rest, ok := strings.CutPrefix(path, modulePath+"/")
+	if !ok {
+		return trace.ModuleVersions
+	}
+
+	module, _, _ := strings.Cut(rest, "/")
+
+	return module
 }
 
 func describe(r *http.Request, format string, args ...any) {

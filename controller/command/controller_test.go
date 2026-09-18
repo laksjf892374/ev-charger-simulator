@@ -13,6 +13,7 @@ import (
 	"cposim/gateway/clock"
 	"cposim/gateway/events"
 	"cposim/gateway/identifier"
+	"cposim/gateway/random"
 	commandrepo "cposim/repository/command"
 )
 
@@ -45,6 +46,7 @@ type fixture struct {
 	clockGateway      *clock.FakeGateway
 	commandController command.Controller
 	eventsGateway     *events.FakeGateway
+	randomGateway     *random.FakeGateway
 }
 
 func newFixture(t *testing.T) fixture {
@@ -55,6 +57,7 @@ func newFixture(t *testing.T) fixture {
 	chargerController.StartChargingResult = entity.Session{SessionID: validSessionID}
 	clockGateway := clock.NewFakeGateway()
 	eventsGateway := events.NewFakeGateway()
+	randomGateway := random.NewFakeGateway()
 	commandController, err := command.NewController(
 		chargerController,
 		clockGateway,
@@ -62,6 +65,7 @@ func newFixture(t *testing.T) fixture {
 		validConfig,
 		eventsGateway,
 		identifier.NewSequentialGateway(),
+		randomGateway,
 	)
 	assert.NoError(t, err)
 
@@ -70,6 +74,7 @@ func newFixture(t *testing.T) fixture {
 		clockGateway:      clockGateway,
 		commandController: commandController,
 		eventsGateway:     eventsGateway,
+		randomGateway:     randomGateway,
 	}
 }
 
@@ -89,7 +94,7 @@ func TestNewController(t *testing.T) {
 		config.StartTimeout = 0
 
 		// When
-		_, err := command.NewController(nil, nil, nil, config, nil, nil)
+		_, err := command.NewController(nil, nil, nil, config, nil, nil, nil)
 
 		// Then
 		assert.Error(t, err)
@@ -130,6 +135,24 @@ func TestStartSession(t *testing.T) {
 		assert.NoError(t, err)
 		startChargingCallCount := len(f.chargerController.StartChargingCalledWith)
 		assert.Equal(t, startChargingCallCount, 0)
+	})
+
+	t.Run("gives the charger's behaviors one random roll per start attempt", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		f.chargerController.GetChargerResult.Behaviors = []entity.BehaviorSpec{{Kind: behavior.KindRealisticReliability}}
+		f.randomGateway.Float64Results = []float64{0.01, 0.99}
+
+		// When
+		unluckyCommand, err := f.commandController.StartSession(validStartSessionInput)
+		assert.NoError(t, err)
+		luckyCommand, err := f.commandController.StartSession(validStartSessionInput)
+		assert.NoError(t, err)
+
+		// Then
+		assert.Equal(t, unluckyCommand.ForcedResult, entity.CommandResultFailed)
+		assert.Equal(t, luckyCommand.ForcedResult, entity.CommandResult(""))
+		assert.Equal(t, f.randomGateway.Float64CallCount, 2)
 	})
 
 	t.Run("accepts the command as pending without touching the charger yet", func(t *testing.T) {

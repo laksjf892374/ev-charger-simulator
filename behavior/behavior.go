@@ -34,20 +34,30 @@ type StartAttempt struct {
 	Reject        bool
 	RejectMessage string
 	ResultDelay   time.Duration
+	ResultMessage string
+	// A random number in [0, 1), drawn once per attempt, for probabilistic behaviors. Behaviors
+	// never draw their own, so the caller decides where randomness comes from.
+	Roll float64
 }
 
 type Tick struct {
 	Charger          entity.Charger
 	ChargingDuration time.Duration
-	Fault            bool
-	PowerFactor      float64
-	Session          entity.Session
+	// Simulated time this tick covers; a per-hour rate becomes a per-tick probability through it.
+	Elapsed     time.Duration
+	Fault       bool
+	PowerFactor float64
+	// A random number in [0, 1), drawn once per charger per tick.
+	Roll    float64
+	Session entity.Session
 }
 
 type Info struct {
 	DefaultParams json.RawMessage `json:"default_params,omitempty"`
 	Description   string          `json:"description"`
 	Kind          string          `json:"kind"`
+	// A few words that complete the sentence "This charger …", for display next to a charger.
+	Label string `json:"label"`
 }
 
 type registration struct {
@@ -59,7 +69,7 @@ var registrationByKind = map[string]registration{}
 
 // Register makes a behavior kind available. defaults supplies the value of every parameter a
 // spec leaves out.
-func Register[T Behavior](kind string, description string, defaults T) {
+func Register[T Behavior](kind string, label string, description string, defaults T) {
 	defaultParams, _ := json.Marshal(defaults)
 	if string(defaultParams) == "{}" {
 		defaultParams = nil
@@ -82,6 +92,7 @@ func Register[T Behavior](kind string, description string, defaults T) {
 			DefaultParams: defaultParams,
 			Description:   description,
 			Kind:          kind,
+			Label:         label,
 		},
 	}
 }

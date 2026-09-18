@@ -15,6 +15,7 @@ import (
 	"cposim/gateway/clock"
 	"cposim/gateway/events"
 	"cposim/gateway/identifier"
+	"cposim/gateway/random"
 	chargerrepo "cposim/repository/charger"
 	siterepo "cposim/repository/site"
 )
@@ -42,21 +43,30 @@ type fixture struct {
 	chargerController charger.Controller
 	clockGateway      *clock.FakeGateway
 	eventsGateway     *events.FakeGateway
+	randomGateway     *random.FakeGateway
 	sessionController *session.FakeController
 }
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 
+	return newFixtureWithConfig(t, validConfig)
+}
+
+func newFixtureWithConfig(t *testing.T, config charger.Config) fixture {
+	t.Helper()
+
 	clockGateway := clock.NewFakeGateway()
 	eventsGateway := events.NewFakeGateway()
+	randomGateway := random.NewFakeGateway()
 	sessionController := session.NewFakeController()
 	chargerController, err := charger.NewController(
 		chargerrepo.NewInMemoryRepository(),
 		clockGateway,
-		validConfig,
+		config,
 		eventsGateway,
 		identifier.NewSequentialGateway(),
+		randomGateway,
 		sessionController,
 		siterepo.NewInMemoryRepository(),
 	)
@@ -69,6 +79,7 @@ func newFixture(t *testing.T) fixture {
 		chargerController: chargerController,
 		clockGateway:      clockGateway,
 		eventsGateway:     eventsGateway,
+		randomGateway:     randomGateway,
 		sessionController: sessionController,
 	}
 }
@@ -113,10 +124,57 @@ func TestNewController(t *testing.T) {
 		config.DefaultVehicle.BatteryCapacityKWH = 0
 
 		// When
-		_, err := charger.NewController(nil, clock.NewFakeGateway(), config, nil, nil, nil, nil)
+		_, err := charger.NewController(nil, clock.NewFakeGateway(), config, nil, nil, nil, nil, nil)
 
 		// Then
 		assert.Error(t, err)
+	})
+}
+
+func TestDefaultBehaviors(t *testing.T) {
+	realistic := []entity.BehaviorSpec{{Kind: behavior.KindRealisticReliability}}
+
+	t.Run("returns an error when a default behavior kind is unknown", func(t *testing.T) {
+		// Given
+		config := validConfig
+		config.DefaultBehaviors = []entity.BehaviorSpec{{Kind: "does_not_exist"}}
+
+		// When
+		_, err := charger.NewController(nil, clock.NewFakeGateway(), config, nil, nil, nil, nil, nil)
+
+		// Then
+		assert.Error(t, err)
+	})
+
+	t.Run("gives the default behaviors to a charger that does not say how to behave", func(t *testing.T) {
+		// Given
+		config := validConfig
+		config.DefaultBehaviors = realistic
+		f := newFixtureWithConfig(t, config)
+
+		// When
+		addedCharger, err := f.chargerController.AddCharger(charger.AddChargerInput{SiteID: validSiteID})
+
+		// Then
+		assert.NoError(t, err)
+		assert.Equal(t, addedCharger.Behaviors, realistic)
+	})
+
+	t.Run("keeps a charger perfectly reliable when it explicitly asks for no behaviors", func(t *testing.T) {
+		// Given
+		config := validConfig
+		config.DefaultBehaviors = realistic
+		f := newFixtureWithConfig(t, config)
+
+		// When
+		addedCharger, err := f.chargerController.AddCharger(charger.AddChargerInput{
+			Behaviors: []entity.BehaviorSpec{},
+			SiteID:    validSiteID,
+		})
+
+		// Then
+		assert.NoError(t, err)
+		assert.Equal(t, addedCharger.Behaviors, []entity.BehaviorSpec{})
 	})
 }
 
@@ -655,6 +713,32 @@ func TestTick(t *testing.T) {
 		finishedCharger, getErr := f.chargerController.GetCharger(validChargerID)
 		assert.NoError(t, getErr)
 		assert.Equal(t, finishedCharger.State, entity.ChargerStateFinishing)
+	})
+
+	t.Run("faults a realistically reliable charger only when its roll comes up", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		seedChargingCharger(t, f, validVehicle, entity.BehaviorSpec{
+			Kind:   behavior.KindRealisticReliability,
+			Params: json.RawMessage(`{"session_faults_per_hour": 1}`),
+		})
+		// a 6-minute tick at 1 fault per hour is a 10% chance
+		f.randomGateway.Float64Results = []float64{0.5, 0.05}
+
+		// When
+		f.clockGateway.Advance(6 * time.Minute)
+		assert.NoError(t, f.chargerController.Tick())
+
+		// Then
+		stopSessionCallCount := len(f.sessionController.StopSessionCalls)
+		assert.Equal(t, stopSessionCallCount, 0)
+
+		// When
+		f.clockGateway.Advance(6 * time.Minute)
+		assert.NoError(t, f.chargerController.Tick())
+
+		// Then
+		assert.Equal(t, f.sessionController.StopSessionCalls[0].StopReason, entity.StopReasonFault)
 	})
 
 	t.Run("faults the charger mid-session when the fault_mid_session behavior is due", func(t *testing.T) {

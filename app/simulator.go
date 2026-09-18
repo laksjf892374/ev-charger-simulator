@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"cposim/behavior"
 	"cposim/controller/charger"
 	"cposim/controller/command"
 	"cposim/controller/session"
@@ -15,6 +16,7 @@ import (
 	"cposim/gateway/clock"
 	"cposim/gateway/identifier"
 	"cposim/gateway/ocpipush"
+	"cposim/gateway/random"
 	"cposim/gateway/scheduler"
 	"cposim/gateway/trace"
 	"cposim/handler/api"
@@ -49,6 +51,9 @@ const (
 	tickFrequencyWall = 250 * time.Millisecond
 	traceCapacity     = 500
 )
+
+// A new charger is about as reliable as a real one unless it says otherwise.
+var defaultBehaviors = []entity.BehaviorSpec{{Kind: behavior.KindRealisticReliability}}
 
 var defaultVehicle = entity.Vehicle{
 	BatteryCapacityKWH: 60,
@@ -94,6 +99,7 @@ func NewSimulator(config Config) (Simulator, error) {
 	return NewSimulatorWithTicker(
 		config,
 		scheduler.NewRealTickerFunc(tickFrequencyWall),
+		random.NewMathGateway(),
 		time.Now,
 	)
 }
@@ -101,6 +107,7 @@ func NewSimulator(config Config) (Simulator, error) {
 func NewSimulatorWithTicker(
 	config Config,
 	newTicker scheduler.NewTickerFunc,
+	randomGateway random.Gateway,
 	wallNow clock.NowFunc,
 ) (Simulator, error) {
 	clockGateway, err := clock.NewScaledGateway(initialSpeed, wallNow)
@@ -153,12 +160,14 @@ func NewSimulatorWithTicker(
 		chargerRepository,
 		clockGateway,
 		charger.Config{
+			DefaultBehaviors:   defaultBehaviors,
 			DefaultMaxPowerKW:  defaultMaxPowerKW,
 			DefaultPricePerKWH: defaultPricePerKWH,
 			DefaultVehicle:     defaultVehicle,
 		},
 		pushGateway,
 		identifierGateway,
+		randomGateway,
 		sessionController,
 		siteRepository,
 	)
@@ -176,6 +185,7 @@ func NewSimulatorWithTicker(
 		},
 		pushGateway,
 		identifierGateway,
+		randomGateway,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("command.NewController: %w", err)

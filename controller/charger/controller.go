@@ -12,6 +12,7 @@ import (
 	"cposim/gateway/clock"
 	"cposim/gateway/events"
 	"cposim/gateway/identifier"
+	"cposim/gateway/random"
 	chargerrepo "cposim/repository/charger"
 	siterepo "cposim/repository/site"
 )
@@ -27,6 +28,9 @@ const (
 )
 
 type Config struct {
+	// Given to a new charger that does not say how it should behave. An explicitly empty list
+	// still means "perfectly reliable".
+	DefaultBehaviors   []entity.BehaviorSpec
 	DefaultMaxPowerKW  float64
 	DefaultPricePerKWH float64
 	DefaultVehicle     entity.Vehicle
@@ -73,6 +77,7 @@ type controller struct {
 	eventsGateway     events.Gateway
 	identifierGateway identifier.Gateway
 	lastTickAt        time.Time
+	randomGateway     random.Gateway
 	sessionController session.Controller
 	siteRepository    siterepo.Repository
 	mu                sync.Mutex
@@ -84,9 +89,14 @@ func NewController(
 	config Config,
 	eventsGateway events.Gateway,
 	identifierGateway identifier.Gateway,
+	randomGateway random.Gateway,
 	sessionController session.Controller,
 	siteRepository siterepo.Repository,
 ) (Controller, error) {
+	if _, err := behavior.Build(config.DefaultBehaviors); err != nil {
+		return nil, fmt.Errorf("behavior.Build: %w", err)
+	}
+
 	if config.DefaultMaxPowerKW <= 0 {
 		return nil, fmt.Errorf("default max power must be positive: power %v kW", config.DefaultMaxPowerKW)
 	}
@@ -106,6 +116,7 @@ func NewController(
 		eventsGateway:     eventsGateway,
 		identifierGateway: identifierGateway,
 		lastTickAt:        clockGateway.Now(),
+		randomGateway:     randomGateway,
 		sessionController: sessionController,
 		siteRepository:    siteRepository,
 	}, nil
@@ -189,7 +200,7 @@ func (c *controller) AddCharger(input AddChargerInput) (entity.Charger, error) {
 	}
 
 	if input.Behaviors == nil {
-		input.Behaviors = []entity.BehaviorSpec{}
+		input.Behaviors = append([]entity.BehaviorSpec{}, c.config.DefaultBehaviors...)
 	}
 
 	charger := entity.Charger{
@@ -649,7 +660,9 @@ func (c *controller) meter(
 	tick := behavior.Tick{
 		Charger:          charger,
 		ChargingDuration: now.Sub(activeSession.StartedAt),
+		Elapsed:          elapsed,
 		PowerFactor:      1,
+		Roll:             c.randomGateway.Float64(),
 		Session:          activeSession,
 	}
 	if err := behavior.ApplyTickInterceptors(charger.Behaviors, &tick); err != nil {

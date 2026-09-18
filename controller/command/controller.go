@@ -11,6 +11,7 @@ import (
 	"cposim/gateway/clock"
 	"cposim/gateway/events"
 	"cposim/gateway/identifier"
+	"cposim/gateway/random"
 	commandrepo "cposim/repository/command"
 )
 
@@ -58,6 +59,7 @@ type controller struct {
 	config            Config
 	eventsGateway     events.Gateway
 	identifierGateway identifier.Gateway
+	randomGateway     random.Gateway
 	mu                sync.Mutex
 }
 
@@ -68,6 +70,7 @@ func NewController(
 	config Config,
 	eventsGateway events.Gateway,
 	identifierGateway identifier.Gateway,
+	randomGateway random.Gateway,
 ) (Controller, error) {
 	if config.CommandLatency < 0 {
 		return nil, fmt.Errorf("command latency must not be negative: latency %v", config.CommandLatency)
@@ -84,6 +87,7 @@ func NewController(
 		config:            config,
 		eventsGateway:     eventsGateway,
 		identifierGateway: identifierGateway,
+		randomGateway:     randomGateway,
 	}, nil
 }
 
@@ -108,6 +112,7 @@ func (c *controller) StartSession(input StartSessionInput) (entity.Command, erro
 	attempt := behavior.StartAttempt{
 		Charger:     targetCharger,
 		ResultDelay: c.config.CommandLatency,
+		Roll:        c.randomGateway.Float64(),
 	}
 	if err := behavior.ApplyStartInterceptors(targetCharger.Behaviors, &attempt); err != nil {
 		return entity.Command{}, fmt.Errorf("behavior.ApplyStartInterceptors: %w", err)
@@ -117,6 +122,7 @@ func (c *controller) StartSession(input StartSessionInput) (entity.Command, erro
 	command.AuthorizationReference = input.AuthorizationReference
 	command.ChargerID = input.ChargerID
 	command.ForcedResult = attempt.ForcedResult
+	command.Message = attempt.ResultMessage
 	command.Token = input.Token
 
 	if attempt.Reject {
@@ -244,7 +250,7 @@ func (c *controller) resolveIfDue(command entity.Command, now time.Time) error {
 // remote start keeps waiting for the driver to plug in until its deadline.
 func (c *controller) attempt(command *entity.Command, now time.Time) (entity.CommandResult, string) {
 	if command.ForcedResult != "" {
-		return command.ForcedResult, "injected by charger behavior"
+		return command.ForcedResult, command.Message
 	}
 
 	switch command.Kind {

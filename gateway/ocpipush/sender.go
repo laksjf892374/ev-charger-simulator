@@ -21,6 +21,7 @@ const (
 type Push struct {
 	Body    any
 	Method  string
+	Module  string
 	Summary string
 	URL     string
 }
@@ -57,6 +58,7 @@ func (s httpSender) Send(push Push) error {
 	entry := trace.Entry{
 		Direction:   trace.DirectionOutbound,
 		Method:      push.Method,
+		Module:      push.Module,
 		RecordedAt:  s.clockGateway.Now(),
 		RequestBody: string(requestBody),
 		Summary:     push.Summary,
