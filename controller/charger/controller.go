@@ -137,6 +137,8 @@ func (c *controller) AddSite(site entity.Site) (entity.Site, error) {
 
 	if site.SiteID == "" {
 		site.SiteID = c.identifierGateway.NewID(siteIDPrefix)
+	} else if _, err := c.siteRepository.Get(site.SiteID); err == nil {
+		return entity.Site{}, fmt.Errorf("site %q already exists", site.SiteID)
 	}
 
 	site.UpdatedAt = c.clockGateway.Now()

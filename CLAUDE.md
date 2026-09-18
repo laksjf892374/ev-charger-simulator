@@ -19,7 +19,9 @@ generators, no routers) — `go.mod` has no `require` block and should stay that
 
 ## Architecture
 
-Strict one-way layering; each layer only knows the layer directly below it, through an interface:
+Strict one-way layering; each layer only knows the layer below it, through an interface. Handlers
+may use any controller (reads come from `charger` and `session`, commands go through `command`);
+controllers only call the controller directly below them:
 
 ```
 main → app (DI root) → handler/* → controller/command → controller/charger → controller/session → gateway/*, repository/*
@@ -42,8 +44,14 @@ main → app (DI root) → handler/* → controller/command → controller/charg
   `controller/charger` owns **charger state** and simulates the hardware (power delivery, vehicle
   state of charge, faults). `controller/command` owns remote commands: synchronous accept/reject,
   then an asynchronous result. Calls only go command → charger → session.
-- **The core (everything above) knows nothing about OCPI or HTTP.** OCPI is an adapter: inbound in
-  `handler/`, outbound as an implementation of `events.Gateway`.
+- **The core (everything above) knows nothing about OCPI or HTTP.** OCPI is an adapter in three
+  packages: `ocpi/` (2.2.1 wire types + `Mapper` from entities, no HTTP), `handler/ocpi` (inbound
+  CPO endpoints, returned as one `http.Handler`), and `gateway/ocpipush` (outbound; implements
+  `events.Gateway`). `Publish…` is called under controller locks, so it only enqueues; one worker
+  goroutine delivers in order through a `Sender` (the seam for retries or delivery faults).
+- `gateway/trace` — in-memory log of OCPI exchanges in both directions, from the CPO's point of
+  view, each with a plain-English `Summary`. Inbound is recorded by `handler/ocpi`'s middleware
+  (handlers call `describe`), outbound by the HTTP `Sender`.
 - The mock eMSP is a demo harness at the edge. Core and adapter packages must never import it; it
   talks to the simulator only over HTTP, like a real eMSP.
 

@@ -12,6 +12,12 @@ type FakeController struct {
 	GetChargerCalledWith      []string
 	GetChargerErr             error
 	GetChargerResult          entity.Charger
+	GetSiteErr                error
+	GetSiteResult             entity.Site
+	ListChargersErr           error
+	ListChargersResult        []entity.Charger
+	ListSitesErr              error
+	ListSitesResult           []entity.Site
 	PhysicalActionCalledWith  []string
 	PhysicalActionErr         error
 	StartChargingCalledWith   []StartChargingInput
@@ -62,7 +68,10 @@ func (c *FakeController) GetCharger(chargerID string) (entity.Charger, error) {
 }
 
 func (c *FakeController) GetSite(siteID string) (entity.Site, error) {
-	return entity.Site{SiteID: siteID}, nil
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.GetSiteResult, c.GetSiteErr
 }
 
 func (c *FakeController) InjectFault(chargerID string) (entity.Charger, error) {
@@ -73,11 +82,14 @@ func (c *FakeController) ListChargers() ([]entity.Charger, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return []entity.Charger{c.GetChargerResult}, c.GetChargerErr
+	return c.ListChargersResult, c.ListChargersErr
 }
 
 func (c *FakeController) ListSites() ([]entity.Site, error) {
-	return nil, nil
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.ListSitesResult, c.ListSitesErr
 }
 
 func (c *FakeController) PlugIn(chargerID string, vehicle entity.Vehicle) (entity.Charger, error) {
