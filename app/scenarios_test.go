@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
+	"cposim/app/mockemsp"
 	"cposim/gateway/random"
-	"cposim/mockemsp"
+	"cposim/internal/assert"
 )
 
 // Scenarios are whole user stories, driven only through the public HTTP APIs of a running

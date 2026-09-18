@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
 	"cposim/entity"
+	"cposim/internal/assert"
 	"cposim/ocpi"
 )
 

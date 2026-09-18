@@ -3,8 +3,8 @@ package charger_test
 import (
 	"testing"
 
-	"cposim/assert"
 	"cposim/entity"
+	"cposim/internal/assert"
 	chargerrepo "cposim/repository/charger"
 )
 

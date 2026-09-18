@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"cposim/app"
-	"cposim/assert"
 	"cposim/gateway/random"
 	"cposim/gateway/scheduler"
+	"cposim/internal/assert"
 )
 
 const (

@@ -3,8 +3,8 @@ package trace_test
 import (
 	"testing"
 
-	"cposim/assert"
 	"cposim/gateway/trace"
+	"cposim/internal/assert"
 )
 
 func TestRecord(t *testing.T) {

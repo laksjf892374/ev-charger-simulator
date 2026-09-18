@@ -3,8 +3,8 @@ package random_test
 import (
 	"testing"
 
-	"cposim/assert"
 	"cposim/gateway/random"
+	"cposim/internal/assert"
 )
 
 func TestFloat64(t *testing.T) {

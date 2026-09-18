@@ -3,8 +3,8 @@ package site_test
 import (
 	"testing"
 
-	"cposim/assert"
 	"cposim/entity"
+	"cposim/internal/assert"
 	siterepo "cposim/repository/site"
 )
 

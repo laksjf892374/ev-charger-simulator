@@ -3,8 +3,8 @@ package metrics_test
 import (
 	"testing"
 
-	"cposim/assert"
 	"cposim/gateway/metrics"
+	"cposim/internal/assert"
 )
 
 func TestSnapshot(t *testing.T) {

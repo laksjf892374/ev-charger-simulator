@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
 	"cposim/gateway/clock"
+	"cposim/internal/assert"
 )
 
 const validMaxSpeed = 600

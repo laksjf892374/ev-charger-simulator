@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"cposim/assert"
 	"cposim/gateway/clock"
 	"cposim/gateway/ocpipush"
 	"cposim/gateway/trace"
+	"cposim/internal/assert"
 )
 
 func TestSend(t *testing.T) {

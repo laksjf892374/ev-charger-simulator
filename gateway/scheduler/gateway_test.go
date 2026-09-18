@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"cposim/assert"
 	"cposim/gateway/scheduler"
+	"cposim/internal/assert"
 )
 
 func newTickerGateway(t *testing.T) (scheduler.Gateway, *scheduler.FakeTicker, *bytes.Buffer) {

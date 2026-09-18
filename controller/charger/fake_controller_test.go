@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"cposim/assert"
 	"cposim/controller/charger"
 	"cposim/entity"
+	"cposim/internal/assert"
 )
 
 func TestFakeController(t *testing.T) {

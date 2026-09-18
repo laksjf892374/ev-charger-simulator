@@ -5,8 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
-	"cposim/behavior"
+	"cposim/controller/behavior"
 	"cposim/controller/charger"
 	"cposim/controller/command"
 	"cposim/entity"
@@ -15,6 +14,7 @@ import (
 	"cposim/gateway/identifier"
 	"cposim/gateway/metrics"
 	"cposim/gateway/random"
+	"cposim/internal/assert"
 	commandrepo "cposim/repository/command"
 )
 

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
 	"cposim/controller/charger"
 	"cposim/controller/command"
 	"cposim/controller/session"
@@ -17,6 +16,7 @@ import (
 	"cposim/gateway/clock"
 	"cposim/gateway/trace"
 	ocpihandler "cposim/handler/ocpi"
+	"cposim/internal/assert"
 	"cposim/ocpi"
 )
 

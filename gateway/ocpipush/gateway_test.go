@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"testing"
 
-	"cposim/assert"
 	"cposim/entity"
 	"cposim/gateway/metrics"
 	"cposim/gateway/ocpipush"
+	"cposim/internal/assert"
 	"cposim/ocpi"
 	chargerrepo "cposim/repository/charger"
 	siterepo "cposim/repository/site"

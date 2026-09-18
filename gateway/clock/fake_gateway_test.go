@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
 	"cposim/gateway/clock"
+	"cposim/internal/assert"
 )
 
 func TestFakeGateway(t *testing.T) {

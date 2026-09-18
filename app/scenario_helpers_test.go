@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
-	"cposim/mockemsp"
+	"cposim/app/mockemsp"
+	"cposim/internal/assert"
 )
 
 // The helpers below let a scenario read like the story it tells. They only ever use the public

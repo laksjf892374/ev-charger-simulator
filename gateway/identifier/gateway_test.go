@@ -3,8 +3,8 @@ package identifier_test
 import (
 	"testing"
 
-	"cposim/assert"
 	"cposim/gateway/identifier"
+	"cposim/internal/assert"
 )
 
 func TestNewID(t *testing.T) {

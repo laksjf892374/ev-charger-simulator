@@ -3,8 +3,8 @@ package app
 import (
 	"net/http"
 
+	"cposim/app/mockemsp"
 	"cposim/gateway/metrics"
-	"cposim/mockemsp"
 )
 
 // Pages left open poll these every second. Logging each successful poll would bury everything

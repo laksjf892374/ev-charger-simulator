@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"cposim/assert"
 	"cposim/entity"
 	"cposim/gateway/events"
+	"cposim/internal/assert"
 )
 
 func TestFakeGateway(t *testing.T) {

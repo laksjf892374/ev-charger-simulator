@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"cposim/app"
-	"cposim/mockemsp"
+	"cposim/app/mockemsp"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"cposim/behavior"
+	"cposim/controller/behavior"
 	"cposim/controller/charger"
 	"cposim/entity"
 )

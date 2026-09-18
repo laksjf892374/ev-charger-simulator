@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"cposim/behavior"
+	"cposim/controller/behavior"
 	"cposim/controller/session"
 	"cposim/entity"
 	"cposim/gateway/clock"

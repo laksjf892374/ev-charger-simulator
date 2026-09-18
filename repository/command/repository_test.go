@@ -3,8 +3,8 @@ package command_test
 import (
 	"testing"
 
-	"cposim/assert"
 	"cposim/entity"
+	"cposim/internal/assert"
 	commandrepo "cposim/repository/command"
 )
 

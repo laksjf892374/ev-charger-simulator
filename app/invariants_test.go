@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
+	"cposim/internal/assert"
 )
 
 // No script can list every order in which people press buttons. These tests instead throw random

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
-	"cposim/behavior"
+	"cposim/controller/behavior"
 	"cposim/entity"
+	"cposim/internal/assert"
 )
 
 func TestBuild(t *testing.T) {

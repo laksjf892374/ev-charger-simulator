@@ -3,8 +3,8 @@ package session_test
 import (
 	"testing"
 
-	"cposim/assert"
 	"cposim/entity"
+	"cposim/internal/assert"
 	sessionrepo "cposim/repository/session"
 )
 

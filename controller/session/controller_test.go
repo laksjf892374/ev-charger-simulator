@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
 	"cposim/controller/session"
 	"cposim/entity"
 	"cposim/gateway/clock"
 	"cposim/gateway/events"
 	"cposim/gateway/identifier"
+	"cposim/internal/assert"
 	cdrrepo "cposim/repository/cdr"
 	sessionrepo "cposim/repository/session"
 )

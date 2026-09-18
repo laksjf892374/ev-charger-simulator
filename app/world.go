@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"cposim/behavior"
+	"cposim/app/mockemsp"
+	"cposim/controller/behavior"
 	"cposim/controller/charger"
 	"cposim/controller/command"
 	"cposim/controller/session"
@@ -20,7 +21,6 @@ import (
 	"cposim/handler/api"
 	ocpihandler "cposim/handler/ocpi"
 	"cposim/handler/web"
-	"cposim/mockemsp"
 	"cposim/ocpi"
 	cdrrepo "cposim/repository/cdr"
 	chargerrepo "cposim/repository/charger"

@@ -7,8 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"cposim/assert"
-	"cposim/behavior"
+	"cposim/controller/behavior"
 	"cposim/controller/charger"
 	"cposim/controller/session"
 	"cposim/entity"
@@ -16,6 +15,7 @@ import (
 	"cposim/gateway/events"
 	"cposim/gateway/identifier"
 	"cposim/gateway/random"
+	"cposim/internal/assert"
 	chargerrepo "cposim/repository/charger"
 	siterepo "cposim/repository/site"
 )

@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"cposim/assert"
 	"cposim/handler/web"
+	"cposim/internal/assert"
 )
 
 func TestNewHandler(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"cposim/assert"
-	"cposim/mockemsp"
+	"cposim/app/mockemsp"
+	"cposim/internal/assert"
 	"cposim/ocpi"
 )
 

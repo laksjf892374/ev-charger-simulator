@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"cposim/behavior"
+	"cposim/controller/behavior"
 	"cposim/controller/charger"
 	"cposim/controller/command"
 	"cposim/controller/session"

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"cposim/app"
-	"cposim/assert"
+	"cposim/internal/assert"
 )
 
 func TestFakeEMSP(t *testing.T) {

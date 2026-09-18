@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"cposim/assert"
 	"cposim/controller/charger"
 	"cposim/controller/command"
 	"cposim/controller/session"
@@ -17,6 +16,7 @@ import (
 	"cposim/gateway/metrics"
 	"cposim/gateway/trace"
 	"cposim/handler/api"
+	"cposim/internal/assert"
 )
 
 const validChargerID = "EVSE-000001"

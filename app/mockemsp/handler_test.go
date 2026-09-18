@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"cposim/assert"
-	"cposim/mockemsp"
+	"cposim/app/mockemsp"
+	"cposim/internal/assert"
 	"cposim/ocpi"
 )
 

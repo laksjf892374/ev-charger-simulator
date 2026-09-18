@@ -3,8 +3,8 @@ package cdr_test
 import (
 	"testing"
 
-	"cposim/assert"
 	"cposim/entity"
+	"cposim/internal/assert"
 	cdrrepo "cposim/repository/cdr"
 )
 
