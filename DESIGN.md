@@ -16,8 +16,9 @@ especially the failure paths, which are the hard ones to reproduce against a rea
 ## Requirements
 
 - R1 Add and remove chargers at runtime.
-- R2 Configure each charger's normal behaviour (power, price) and its faults. Sane defaults; adding
-  a new vector of configuration must be cheap.
+- R2 Configure each charger's normal behaviour (power, price) and its reliability, from "about as
+  reliable as a real one" (the default) to specific, reproducible failures. Adding a new vector of
+  configuration must be cheap.
 - R3 Act as a person standing at the charger: plug in, unplug, press stop, break it, fix it.
 - R4 Behave as a CPO over real OCPI 2.2.1: locations, sessions, CDRs, commands
   (`START_SESSION`, `STOP_SESSION`, `UNLOCK_CONNECTOR`), both pull and push.
@@ -72,10 +73,17 @@ The connector is locked while charging. A fault mid-session ends the session (a 
 issued) and leaves the cable locked until `UNLOCK_CONNECTOR` or the fault is cleared. A remote
 start on an unplugged charger waits for plug-in until `StartTimeout`, then resolves `TIMEOUT`.
 
-### Built-in faults (all CPO-side)
+### Built-in behaviors (all CPO-side)
+
+New chargers are `realistic_reliability` unless they say otherwise: the everyday case is a
+charger that mostly works, and an eMSP that is only ever tested against perfect chargers or
+certain failures has not been tested against the real thing. Randomness is injected
+(`gateway/random`): controllers draw one roll per start attempt and one per charger per tick and
+hand it to the behavior, so behaviors stay stateless and every test is deterministic.
 
 | kind                | what the eMSP sees                                              |
 |---------------------|-----------------------------------------------------------------|
+| `realistic_reliability` | **default.** 5% of starts `FAILED`; 0.02 mid-session faults per hour; both configurable, 0 = perfect |
 | `reject_start`      | `CommandResponse REJECTED`, no result follows                   |
 | `start_fails`       | accepted, then `CommandResult FAILED` after a delay; no session |
 | `start_timeout`     | accepted, then `CommandResult TIMEOUT` after a long wait        |
