@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -129,6 +130,24 @@ func TestReceiver(t *testing.T) {
 		assert.Equal(t, believed.Sessions[0].KWH, 5.0)
 		cdrCount := len(believed.CDRs)
 		assert.Equal(t, cdrCount, 2)
+	})
+}
+
+func TestHistoryIsBounded(t *testing.T) {
+	t.Run("keeps only the most recent bills", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+
+		// When
+		for i := 0; i < 205; i++ {
+			serve(t, f, http.MethodPost, "/emsp/ocpi/2.2.1/cdrs", `{"id": "CDR-`+strconv.Itoa(i)+`"}`)
+		}
+
+		// Then
+		cdrs := state(t, f).CDRs
+		cdrCount := len(cdrs)
+		assert.Equal(t, cdrCount, 200)
+		assert.Equal(t, cdrs[0].ID, "CDR-5")
 	})
 }
 

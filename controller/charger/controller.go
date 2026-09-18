@@ -3,6 +3,7 @@ package charger
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"sync"
 	"time"
 
@@ -21,11 +22,21 @@ const (
 	chargerIDPrefix = "EVSE"
 	siteIDPrefix    = "SITE"
 
+	// Bounds on what a caller may configure. They keep the simulation physically plausible and a
+	// public instance from being filled with junk.
+	maxBatteryCapacityKWH = 1000
+	maxPowerKW            = 1000
+	maxPricePerKWH        = 100
+	maxTextLength         = 200
+
 	// Above this state of charge a vehicle tapers linearly from full power down to
 	// taperFloorPowerFactor at 100%.
 	taperFloorPowerFactor   = 0.1
 	taperStartStateOfCharge = 0.8
 )
+
+// IDs end up in URL paths and in OCPI fields limited to 36 characters.
+var validID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,36}$`)
 
 type Config struct {
 	// Given to a new charger that does not say how it should behave. An explicitly empty list
@@ -34,6 +45,8 @@ type Config struct {
 	DefaultMaxPowerKW  float64
 	DefaultPricePerKWH float64
 	DefaultVehicle     entity.Vehicle
+	MaxChargers        int
+	MaxSites           int
 }
 
 type AddChargerInput struct {
@@ -109,6 +122,10 @@ func NewController(
 		return nil, fmt.Errorf("validateVehicle: %w", err)
 	}
 
+	if config.MaxChargers <= 0 || config.MaxSites <= 0 {
+		return nil, fmt.Errorf("charger and site limits must be positive: limits %d and %d", config.MaxChargers, config.MaxSites)
+	}
+
 	return &controller{
 		chargerRepository: chargerRepository,
 		clockGateway:      clockGateway,
@@ -123,12 +140,12 @@ func NewController(
 }
 
 func validateVehicle(vehicle entity.Vehicle) error {
-	if vehicle.BatteryCapacityKWH <= 0 {
-		return fmt.Errorf("vehicle battery capacity must be positive: capacity %v kWh", vehicle.BatteryCapacityKWH)
+	if vehicle.BatteryCapacityKWH <= 0 || vehicle.BatteryCapacityKWH > maxBatteryCapacityKWH {
+		return fmt.Errorf("vehicle battery capacity must be above 0 and at most %d kWh: capacity %v kWh", maxBatteryCapacityKWH, vehicle.BatteryCapacityKWH)
 	}
 
-	if vehicle.MaxPowerKW <= 0 {
-		return fmt.Errorf("vehicle max power must be positive: power %v kW", vehicle.MaxPowerKW)
+	if vehicle.MaxPowerKW <= 0 || vehicle.MaxPowerKW > maxPowerKW {
+		return fmt.Errorf("vehicle max power must be above 0 and at most %d kW: power %v kW", maxPowerKW, vehicle.MaxPowerKW)
 	}
 
 	if vehicle.StateOfCharge < 0 || vehicle.StateOfCharge >= 1 {
@@ -142,8 +159,17 @@ func (c *controller) AddSite(site entity.Site) (entity.Site, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if site.Name == "" {
-		return entity.Site{}, fmt.Errorf("site name must not be empty")
+	if err := validateSite(site); err != nil {
+		return entity.Site{}, fmt.Errorf("validateSite: %w", err)
+	}
+
+	sites, err := c.siteRepository.List()
+	if err != nil {
+		return entity.Site{}, fmt.Errorf("siteRepository.List: %w", err)
+	}
+
+	if len(sites) >= c.config.MaxSites {
+		return entity.Site{}, fmt.Errorf("site limit reached: limit %d", c.config.MaxSites)
 	}
 
 	if site.SiteID == "" {
@@ -163,6 +189,28 @@ func (c *controller) AddSite(site entity.Site) (entity.Site, error) {
 	}
 
 	return site, nil
+}
+
+func validateSite(site entity.Site) error {
+	if site.Name == "" {
+		return fmt.Errorf("site name must not be empty")
+	}
+
+	if site.SiteID != "" && !validID.MatchString(site.SiteID) {
+		return fmt.Errorf("site ID must be 1-36 letters, digits, '_' or '-': site ID %q", site.SiteID)
+	}
+
+	for _, text := range []string{site.Address, site.City, site.CountryCode, site.Name} {
+		if len(text) > maxTextLength {
+			return fmt.Errorf("site text fields must be at most %d characters", maxTextLength)
+		}
+	}
+
+	if math.Abs(site.Latitude) > 90 || math.Abs(site.Longitude) > 180 {
+		return fmt.Errorf("site coordinates are out of range: latitude %v, longitude %v", site.Latitude, site.Longitude)
+	}
+
+	return nil
 }
 
 func (c *controller) GetSite(siteID string) (entity.Site, error) {
@@ -195,8 +243,25 @@ func (c *controller) AddCharger(input AddChargerInput) (entity.Charger, error) {
 		return entity.Charger{}, fmt.Errorf("behavior.Build: %w", err)
 	}
 
-	if input.MaxPowerKW < 0 || input.PricePerKWH < 0 {
-		return entity.Charger{}, fmt.Errorf("max power and price must not be negative")
+	if input.MaxPowerKW < 0 || input.MaxPowerKW > maxPowerKW {
+		return entity.Charger{}, fmt.Errorf("max power must be between 0 and %d kW: power %v kW", maxPowerKW, input.MaxPowerKW)
+	}
+
+	if input.PricePerKWH < 0 || input.PricePerKWH > maxPricePerKWH {
+		return entity.Charger{}, fmt.Errorf("price must be between 0 and %d per kWh: price %v", maxPricePerKWH, input.PricePerKWH)
+	}
+
+	if input.ChargerID != "" && !validID.MatchString(input.ChargerID) {
+		return entity.Charger{}, fmt.Errorf("charger ID must be 1-36 letters, digits, '_' or '-': charger ID %q", input.ChargerID)
+	}
+
+	chargers, err := c.chargerRepository.List()
+	if err != nil {
+		return entity.Charger{}, fmt.Errorf("chargerRepository.List: %w", err)
+	}
+
+	if len(chargers) >= c.config.MaxChargers {
+		return entity.Charger{}, fmt.Errorf("charger limit reached: limit %d", c.config.MaxChargers)
 	}
 
 	if input.Behaviors == nil {

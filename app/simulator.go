@@ -47,6 +47,13 @@ const (
 	defaultPricePerKWH = 0.45
 	initialSpeed       = 1
 
+	// Limits that keep a public, unauthenticated, in-memory instance bounded.
+	maxChargers          = 50
+	maxCompletedSessions = 500
+	maxFinishedCommands  = 500
+	maxSites             = 20
+	maxSpeed             = 600
+
 	pushQueueSize     = 1024
 	simulationJobID   = "simulation"
 	tickFrequencyWall = 250 * time.Millisecond
@@ -111,7 +118,7 @@ func NewSimulatorWithTicker(
 	randomGateway random.Gateway,
 	wallNow clock.NowFunc,
 ) (Simulator, error) {
-	clockGateway, err := clock.NewScaledGateway(initialSpeed, wallNow)
+	clockGateway, err := clock.NewScaledGateway(maxSpeed, initialSpeed, wallNow)
 	if err != nil {
 		return nil, fmt.Errorf("clock.NewScaledGateway: %w", err)
 	}
@@ -147,6 +154,7 @@ func NewSimulatorWithTicker(
 		clockGateway,
 		session.Config{
 			Currency:              currency,
+			MaxCompletedSessions:  maxCompletedSessions,
 			SessionUpdateInterval: sessionUpdateInterval,
 		},
 		pushGateway,
@@ -165,6 +173,8 @@ func NewSimulatorWithTicker(
 			DefaultMaxPowerKW:  defaultMaxPowerKW,
 			DefaultPricePerKWH: defaultPricePerKWH,
 			DefaultVehicle:     defaultVehicle,
+			MaxChargers:        maxChargers,
+			MaxSites:           maxSites,
 		},
 		pushGateway,
 		identifierGateway,
@@ -181,8 +191,9 @@ func NewSimulatorWithTicker(
 		clockGateway,
 		commandrepo.NewInMemoryRepository(),
 		command.Config{
-			CommandLatency: commandLatency,
-			StartTimeout:   startTimeout,
+			CommandLatency:      commandLatency,
+			MaxFinishedCommands: maxFinishedCommands,
+			StartTimeout:        startTimeout,
 		},
 		pushGateway,
 		identifierGateway,

@@ -20,6 +20,8 @@ const commandIDPrefix = "CMD"
 type Config struct {
 	// Simulated time between accepting a command and the charger acting on it.
 	CommandLatency time.Duration
+	// How many finished (rejected or resolved) commands are kept; older ones are forgotten.
+	MaxFinishedCommands int
 	// How long a remote start waits for the driver to plug in before resolving as TIMEOUT.
 	StartTimeout time.Duration
 }
@@ -74,6 +76,10 @@ func NewController(
 ) (Controller, error) {
 	if config.CommandLatency < 0 {
 		return nil, fmt.Errorf("command latency must not be negative: latency %v", config.CommandLatency)
+	}
+
+	if config.MaxFinishedCommands <= 0 {
+		return nil, fmt.Errorf("max finished commands must be positive: max %d", config.MaxFinishedCommands)
 	}
 
 	if config.StartTimeout <= 0 {
@@ -164,6 +170,43 @@ func (c *controller) updateCommand(command entity.Command) error {
 
 	if err := c.eventsGateway.PublishCommandEvent(command); err != nil {
 		return fmt.Errorf("eventsGateway.PublishCommandEvent: %w", err)
+	}
+
+	if command.State == entity.CommandStatePending {
+		return nil
+	}
+
+	if err := c.forgetOldestFinished(); err != nil {
+		return fmt.Errorf("forgetOldestFinished: %w", err)
+	}
+
+	return nil
+}
+
+// forgetOldestFinished drops finished commands beyond the retention limit, oldest first. IDs are
+// sequential, so list order is age order. Pending commands are never dropped.
+func (c *controller) forgetOldestFinished() error {
+	commands, err := c.commandRepository.List()
+	if err != nil {
+		return fmt.Errorf("commandRepository.List: %w", err)
+	}
+
+	finishedCommandIDs := []string{}
+	for _, command := range commands {
+		if command.State != entity.CommandStatePending {
+			finishedCommandIDs = append(finishedCommandIDs, command.CommandID)
+		}
+	}
+
+	excess := len(finishedCommandIDs) - c.config.MaxFinishedCommands
+	if excess <= 0 {
+		return nil
+	}
+
+	for _, commandID := range finishedCommandIDs[:excess] {
+		if err := c.commandRepository.Delete(commandID); err != nil {
+			return fmt.Errorf("commandRepository.Delete: %w", err)
+		}
 	}
 
 	return nil

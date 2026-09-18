@@ -15,11 +15,19 @@ import (
 	"cposim/entity"
 )
 
+const MaxBehaviorsPerCharger = 8
+
 type Behavior any
 
 // StartInterceptor can change how a remote start plays out.
 type StartInterceptor interface {
 	InterceptStart(attempt *StartAttempt)
+}
+
+// Validator is implemented by behaviors whose params can be out of range. Build refuses a spec
+// that fails it, so a charger can never be configured into nonsense.
+type Validator interface {
+	Validate() error
 }
 
 // TickInterceptor is consulted on every simulation tick of a charging session.
@@ -111,6 +119,10 @@ func Catalog() []Info {
 }
 
 func Build(specs []entity.BehaviorSpec) ([]Behavior, error) {
+	if len(specs) > MaxBehaviorsPerCharger {
+		return nil, fmt.Errorf("too many behaviors: %d, limit %d", len(specs), MaxBehaviorsPerCharger)
+	}
+
 	behaviors := make([]Behavior, 0, len(specs))
 	for _, spec := range specs {
 		registered, ok := registrationByKind[spec.Kind]
@@ -121,6 +133,12 @@ func Build(specs []entity.BehaviorSpec) ([]Behavior, error) {
 		built, err := registered.build(spec.Params)
 		if err != nil {
 			return nil, fmt.Errorf("build %q: %w", spec.Kind, err)
+		}
+
+		if validator, ok := built.(Validator); ok {
+			if err := validator.Validate(); err != nil {
+				return nil, fmt.Errorf("behavior %q: %w", spec.Kind, err)
+			}
 		}
 
 		behaviors = append(behaviors, built)

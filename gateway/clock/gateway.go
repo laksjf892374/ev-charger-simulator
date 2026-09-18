@@ -17,6 +17,7 @@ type Gateway interface {
 type NowFunc func() time.Time
 
 type scaledGateway struct {
+	maxSpeed        float64
 	simulatedAnchor time.Time
 	speed           float64
 	wallAnchor      time.Time
@@ -25,21 +26,32 @@ type scaledGateway struct {
 }
 
 func NewScaledGateway(
+	maxSpeed float64,
 	speed float64,
 	wallNow NowFunc,
 ) (Gateway, error) {
-	if speed <= 0 {
-		return nil, fmt.Errorf("speed must be positive: speed %v", speed)
+	if err := validateSpeed(speed, maxSpeed); err != nil {
+		return nil, fmt.Errorf("validateSpeed: %w", err)
 	}
 
 	startedAt := wallNow().UTC()
 
 	return &scaledGateway{
+		maxSpeed:        maxSpeed,
 		simulatedAnchor: startedAt,
 		speed:           speed,
 		wallAnchor:      startedAt,
 		wallNow:         wallNow,
 	}, nil
+}
+
+// An unbounded speed would turn one tick into years of simulated time.
+func validateSpeed(speed float64, maxSpeed float64) error {
+	if speed <= 0 || speed > maxSpeed {
+		return fmt.Errorf("speed must be above 0 and at most %v: speed %v", maxSpeed, speed)
+	}
+
+	return nil
 }
 
 func (g *scaledGateway) Now() time.Time {
@@ -60,8 +72,8 @@ func (g *scaledGateway) SetSpeed(speed float64) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	if speed <= 0 {
-		return fmt.Errorf("speed must be positive: speed %v", speed)
+	if err := validateSpeed(speed, g.maxSpeed); err != nil {
+		return fmt.Errorf("validateSpeed: %w", err)
 	}
 
 	// re-anchor so time already elapsed keeps the speed it elapsed at

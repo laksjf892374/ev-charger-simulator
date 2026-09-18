@@ -24,6 +24,7 @@ const (
 var (
 	validConfig = session.Config{
 		Currency:              "EUR",
+		MaxCompletedSessions:  2,
 		SessionUpdateInterval: 30 * time.Second,
 	}
 	validStartSessionInput = session.StartSessionInput{
@@ -76,6 +77,18 @@ func TestNewController(t *testing.T) {
 		assert.Error(t, err)
 	})
 
+	t.Run("returns an error when the retention limit is not positive", func(t *testing.T) {
+		// Given
+		config := validConfig
+		config.MaxCompletedSessions = 0
+
+		// When
+		_, err := session.NewController(nil, nil, config, nil, nil, nil)
+
+		// Then
+		assert.Error(t, err)
+	})
+
 	t.Run("returns an error when the session update interval is not positive", func(t *testing.T) {
 		// Given
 		config := validConfig
@@ -86,6 +99,40 @@ func TestNewController(t *testing.T) {
 
 		// Then
 		assert.Error(t, err)
+	})
+}
+
+func TestRetention(t *testing.T) {
+	t.Run("forgets the oldest completed sessions and their CDRs, but never an active session", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		activeSession, err := f.sessionController.StartSession(validStartSessionInput)
+		assert.NoError(t, err)
+
+		// When
+		for i := 0; i < 3; i++ {
+			completedSession, err := f.sessionController.StartSession(validStartSessionInput)
+			assert.NoError(t, err)
+			_, err = f.sessionController.StopSession(completedSession.SessionID, entity.StopReasonRemote)
+			assert.NoError(t, err)
+		}
+
+		// Then
+		sessions, err := f.sessionController.ListSessions()
+		assert.NoError(t, err)
+		sessionIDs := []string{}
+		for _, listedSession := range sessions {
+			sessionIDs = append(sessionIDs, listedSession.SessionID)
+		}
+		assert.Equal(t, sessionIDs, []string{activeSession.SessionID, "SES-000003", "SES-000004"})
+
+		cdrs, err := f.sessionController.ListCDRs()
+		assert.NoError(t, err)
+		cdrSessionIDs := []string{}
+		for _, cdr := range cdrs {
+			cdrSessionIDs = append(cdrSessionIDs, cdr.SessionID)
+		}
+		assert.Equal(t, cdrSessionIDs, []string{"SES-000003", "SES-000004"})
 	})
 }
 

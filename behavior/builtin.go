@@ -1,6 +1,7 @@
 package behavior
 
 import (
+	"fmt"
 	"time"
 
 	"cposim/entity"
@@ -100,6 +101,35 @@ func (b startTimeout) InterceptStart(attempt *StartAttempt) {
 	attempt.ForcedResult = entity.CommandResultTimeout
 	attempt.ResultDelay = seconds(b.TimeoutSeconds)
 	attempt.ResultMessage = "the charger never answered"
+}
+
+const (
+	maxDelaySeconds  = 24 * 60 * 60
+	maxFaultsPerHour = 3600
+)
+
+func validateDelay(name string, value float64) error {
+	if value < 0 || value > maxDelaySeconds {
+		return fmt.Errorf("%s must be between 0 and %d: %s %v", name, maxDelaySeconds, name, value)
+	}
+
+	return nil
+}
+
+func (b faultMidSession) Validate() error { return validateDelay("after_s", b.AfterSeconds) }
+func (b startFails) Validate() error      { return validateDelay("delay_s", b.DelaySeconds) }
+func (b startTimeout) Validate() error    { return validateDelay("timeout_s", b.TimeoutSeconds) }
+
+func (b realisticReliability) Validate() error {
+	if b.StartFailureRate < 0 || b.StartFailureRate > 1 {
+		return fmt.Errorf("start_failure_rate must be between 0 and 1: start_failure_rate %v", b.StartFailureRate)
+	}
+
+	if b.SessionFaultsPerHour < 0 || b.SessionFaultsPerHour > maxFaultsPerHour {
+		return fmt.Errorf("session_faults_per_hour must be between 0 and %d: session_faults_per_hour %v", maxFaultsPerHour, b.SessionFaultsPerHour)
+	}
+
+	return nil
 }
 
 func seconds(value float64) time.Duration {

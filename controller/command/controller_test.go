@@ -25,8 +25,9 @@ const (
 
 var (
 	validConfig = command.Config{
-		CommandLatency: 2 * time.Second,
-		StartTimeout:   60 * time.Second,
+		CommandLatency:      2 * time.Second,
+		MaxFinishedCommands: 2,
+		StartTimeout:        60 * time.Second,
 	}
 	validPluggedInCharger = entity.Charger{
 		ChargerID: validChargerID,
@@ -169,6 +170,32 @@ func TestStartSession(t *testing.T) {
 		assert.Equal(t, startCommand.CallbackReference, validCallbackReference)
 		startChargingCallCount := len(f.chargerController.StartChargingCalledWith)
 		assert.Equal(t, startChargingCallCount, 0)
+	})
+}
+
+func TestRetention(t *testing.T) {
+	t.Run("forgets the oldest finished commands, but never a pending one", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		f.chargerController.GetChargerResult.Vehicle = nil
+		pendingCommand, err := f.commandController.StartSession(validStartSessionInput)
+		assert.NoError(t, err)
+
+		// When
+		f.chargerController.GetChargerResult.Behaviors = []entity.BehaviorSpec{{Kind: behavior.KindRejectStart}}
+		for i := 0; i < 3; i++ {
+			_, err := f.commandController.StartSession(validStartSessionInput)
+			assert.NoError(t, err)
+		}
+
+		// Then
+		commands, err := f.commandController.ListCommands()
+		assert.NoError(t, err)
+		commandIDs := []string{}
+		for _, listedCommand := range commands {
+			commandIDs = append(commandIDs, listedCommand.CommandID)
+		}
+		assert.Equal(t, commandIDs, []string{pendingCommand.CommandID, "CMD-000003", "CMD-000004"})
 	})
 }
 

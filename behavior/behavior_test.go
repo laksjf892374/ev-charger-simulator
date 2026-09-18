@@ -38,6 +38,49 @@ func TestBuild(t *testing.T) {
 	})
 }
 
+func TestValidation(t *testing.T) {
+	t.Run("returns an error when a delay is negative or absurdly long", func(t *testing.T) {
+		// Given
+		negative := []entity.BehaviorSpec{{Kind: behavior.KindStartFails, Params: json.RawMessage(`{"delay_s": -1}`)}}
+		absurd := []entity.BehaviorSpec{{Kind: behavior.KindStartTimeout, Params: json.RawMessage(`{"timeout_s": 1e18}`)}}
+
+		// When
+		_, negativeErr := behavior.Build(negative)
+		_, absurdErr := behavior.Build(absurd)
+
+		// Then
+		assert.Error(t, negativeErr)
+		assert.Error(t, absurdErr)
+		assert.Contains(t, absurdErr.Error(), "timeout_s must be between 0 and 86400")
+	})
+
+	t.Run("returns an error when a failure rate is not a probability", func(t *testing.T) {
+		// Given
+		specs := []entity.BehaviorSpec{{Kind: behavior.KindRealisticReliability, Params: json.RawMessage(`{"start_failure_rate": 1.5}`)}}
+
+		// When
+		_, err := behavior.Build(specs)
+
+		// Then
+		assert.Error(t, err)
+	})
+
+	t.Run("returns an error when a charger is given too many behaviors", func(t *testing.T) {
+		// Given
+		specs := make([]entity.BehaviorSpec, behavior.MaxBehaviorsPerCharger+1)
+		for i := range specs {
+			specs[i] = entity.BehaviorSpec{Kind: behavior.KindRejectStart}
+		}
+
+		// When
+		_, err := behavior.Build(specs)
+
+		// Then
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "too many behaviors")
+	})
+}
+
 func TestCatalog(t *testing.T) {
 	t.Run("lists the built-in behaviors ordered by kind with their default params", func(t *testing.T) {
 		// When

@@ -17,6 +17,11 @@ import (
 const (
 	CommandResultPending = "PENDING"
 
+	// The mock keeps only its most recent history: it lives in the same small process as the CPO.
+	maxStoredCDRs     = 200
+	maxStoredCommands = 200
+	maxStoredSessions = 200
+
 	evseStatusRemoved = "REMOVED"
 )
 
@@ -122,6 +127,20 @@ func (s *store) putSession(session ocpi.Session) {
 	defer s.mu.Unlock()
 
 	s.sessionBySessionID[session.ID] = session
+
+	if len(s.sessionBySessionID) <= maxStoredSessions {
+		return
+	}
+
+	sessionIDs := make([]string, 0, len(s.sessionBySessionID))
+	for sessionID := range s.sessionBySessionID {
+		sessionIDs = append(sessionIDs, sessionID)
+	}
+
+	sort.Strings(sessionIDs)
+	for _, sessionID := range sessionIDs[:len(sessionIDs)-maxStoredSessions] {
+		delete(s.sessionBySessionID, sessionID)
+	}
 }
 
 // addCDR appends without checking for duplicates: a CDR is a bill, and this eMSP bills whatever
@@ -131,6 +150,9 @@ func (s *store) addCDR(cdr ocpi.CDR) {
 	defer s.mu.Unlock()
 
 	s.cdrs = append(s.cdrs, cdr)
+	if len(s.cdrs) > maxStoredCDRs {
+		s.cdrs = s.cdrs[len(s.cdrs)-maxStoredCDRs:]
+	}
 }
 
 func (s *store) addCommand(command Command) {
@@ -138,6 +160,9 @@ func (s *store) addCommand(command Command) {
 	defer s.mu.Unlock()
 
 	s.commands = append(s.commands, command)
+	if len(s.commands) > maxStoredCommands {
+		s.commands = s.commands[len(s.commands)-maxStoredCommands:]
+	}
 }
 
 func (s *store) resolveCommand(uid string, result ocpi.CommandResult) bool {

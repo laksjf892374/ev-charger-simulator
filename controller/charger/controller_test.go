@@ -31,6 +31,8 @@ var (
 		DefaultMaxPowerKW:  50,
 		DefaultPricePerKWH: 0.45,
 		DefaultVehicle:     validVehicle,
+		MaxChargers:        3,
+		MaxSites:           2,
 	}
 	validVehicle = entity.Vehicle{
 		BatteryCapacityKWH: 60,
@@ -175,6 +177,95 @@ func TestDefaultBehaviors(t *testing.T) {
 		// Then
 		assert.NoError(t, err)
 		assert.Equal(t, addedCharger.Behaviors, []entity.BehaviorSpec{})
+	})
+}
+
+func TestAddSite(t *testing.T) {
+	t.Run("returns an error when the site ID would not survive a URL path", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+
+		// When
+		_, err := f.chargerController.AddSite(entity.Site{Name: "Bad", SiteID: "../etc"})
+
+		// Then
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "site ID must be 1-36 letters")
+	})
+
+	t.Run("returns an error when the coordinates are out of range", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+
+		// When
+		_, err := f.chargerController.AddSite(entity.Site{Latitude: 91, Name: "Nowhere"})
+
+		// Then
+		assert.Error(t, err)
+	})
+
+	t.Run("returns an error when the site limit is reached", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		_, err := f.chargerController.AddSite(entity.Site{Name: "Second"})
+		assert.NoError(t, err)
+
+		// When
+		_, err = f.chargerController.AddSite(entity.Site{Name: "Third"})
+
+		// Then
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "site limit reached: limit 2")
+	})
+}
+
+func TestAddChargerGuardrails(t *testing.T) {
+	t.Run("returns an error when the charger ID would not survive a URL path", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+
+		// When
+		_, err := f.chargerController.AddCharger(charger.AddChargerInput{ChargerID: "a/b", SiteID: validSiteID})
+
+		// Then
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "charger ID must be 1-36 letters")
+	})
+
+	t.Run("returns an error when the power or price is implausible", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+
+		// When
+		_, powerErr := f.chargerController.AddCharger(charger.AddChargerInput{MaxPowerKW: 1e9, SiteID: validSiteID})
+		_, priceErr := f.chargerController.AddCharger(charger.AddChargerInput{PricePerKWH: -1, SiteID: validSiteID})
+
+		// Then
+		assert.Error(t, powerErr)
+		assert.Error(t, priceErr)
+	})
+
+	t.Run("returns an error when the charger limit is reached, and frees a slot on removal", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		for i := 0; i < 3; i++ {
+			_, err := f.chargerController.AddCharger(charger.AddChargerInput{SiteID: validSiteID})
+			assert.NoError(t, err)
+		}
+
+		// When
+		_, err := f.chargerController.AddCharger(charger.AddChargerInput{SiteID: validSiteID})
+
+		// Then
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "charger limit reached: limit 3")
+
+		// When
+		assert.NoError(t, f.chargerController.RemoveCharger("EVSE-000001"))
+		_, err = f.chargerController.AddCharger(charger.AddChargerInput{SiteID: validSiteID})
+
+		// Then
+		assert.NoError(t, err)
 	})
 }
 

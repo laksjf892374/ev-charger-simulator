@@ -20,7 +20,10 @@ const (
 )
 
 type Config struct {
-	Currency              string
+	Currency string
+	// How many completed sessions (and their CDRs) are kept; older ones are forgotten. Everything is
+	// in memory, so history has to be bounded.
+	MaxCompletedSessions  int
 	SessionUpdateInterval time.Duration
 }
 
@@ -62,6 +65,10 @@ func NewController(
 ) (Controller, error) {
 	if config.Currency == "" {
 		return nil, fmt.Errorf("currency must not be empty")
+	}
+
+	if config.MaxCompletedSessions <= 0 {
+		return nil, fmt.Errorf("max completed sessions must be positive: max %d", config.MaxCompletedSessions)
 	}
 
 	if config.SessionUpdateInterval <= 0 {
@@ -222,6 +229,10 @@ func (c *controller) StopSession(sessionID string, stopReason entity.StopReason)
 		return entity.Session{}, fmt.Errorf("createCDR: %w", err)
 	}
 
+	if err := c.forgetOldestCompleted(); err != nil {
+		return entity.Session{}, fmt.Errorf("forgetOldestCompleted: %w", err)
+	}
+
 	return session, nil
 }
 
@@ -255,4 +266,52 @@ func (c *controller) createCDR(session entity.Session) error {
 
 func roundToCents(amount float64) float64 {
 	return math.Round(amount*100) / 100
+}
+
+// forgetOldestCompleted drops completed sessions beyond the retention limit, oldest first, along
+// with their CDRs. IDs are sequential, so list order is age order. Nothing is published: this is
+// the simulator forgetting, not something that happened in the simulated world.
+func (c *controller) forgetOldestCompleted() error {
+	sessions, err := c.sessionRepository.List()
+	if err != nil {
+		return fmt.Errorf("sessionRepository.List: %w", err)
+	}
+
+	completedSessionIDs := []string{}
+	for _, session := range sessions {
+		if session.State == entity.SessionStateCompleted {
+			completedSessionIDs = append(completedSessionIDs, session.SessionID)
+		}
+	}
+
+	excess := len(completedSessionIDs) - c.config.MaxCompletedSessions
+	if excess <= 0 {
+		return nil
+	}
+
+	forgottenSessionIDs := map[string]bool{}
+	for _, sessionID := range completedSessionIDs[:excess] {
+		forgottenSessionIDs[sessionID] = true
+
+		if err := c.sessionRepository.Delete(sessionID); err != nil {
+			return fmt.Errorf("sessionRepository.Delete: %w", err)
+		}
+	}
+
+	cdrs, err := c.cdrRepository.List()
+	if err != nil {
+		return fmt.Errorf("cdrRepository.List: %w", err)
+	}
+
+	for _, cdr := range cdrs {
+		if !forgottenSessionIDs[cdr.SessionID] {
+			continue
+		}
+
+		if err := c.cdrRepository.Delete(cdr.CDRID); err != nil {
+			return fmt.Errorf("cdrRepository.Delete: %w", err)
+		}
+	}
+
+	return nil
 }

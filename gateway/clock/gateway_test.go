@@ -8,6 +8,8 @@ import (
 	"cposim/gateway/clock"
 )
 
+const validMaxSpeed = 600
+
 var validStartedAt = time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)
 
 func newWallClock(t *testing.T) (clock.NowFunc, func(time.Duration)) {
@@ -26,7 +28,7 @@ func TestNewScaledGateway(t *testing.T) {
 		wallNow, _ := newWallClock(t)
 
 		// When
-		_, err := clock.NewScaledGateway(0, wallNow)
+		_, err := clock.NewScaledGateway(validMaxSpeed, 0, wallNow)
 
 		// Then
 		assert.Error(t, err)
@@ -37,7 +39,7 @@ func TestNow(t *testing.T) {
 	t.Run("advances simulated time at the configured multiple of wall time", func(t *testing.T) {
 		// Given
 		wallNow, advanceWallTime := newWallClock(t)
-		clockGateway, err := clock.NewScaledGateway(60, wallNow)
+		clockGateway, err := clock.NewScaledGateway(validMaxSpeed, 60, wallNow)
 		assert.NoError(t, err)
 
 		// When
@@ -52,7 +54,7 @@ func TestSetSpeed(t *testing.T) {
 	t.Run("returns an error when the speed is not positive", func(t *testing.T) {
 		// Given
 		wallNow, _ := newWallClock(t)
-		clockGateway, err := clock.NewScaledGateway(1, wallNow)
+		clockGateway, err := clock.NewScaledGateway(validMaxSpeed, 1, wallNow)
 		assert.NoError(t, err)
 
 		// When
@@ -63,10 +65,24 @@ func TestSetSpeed(t *testing.T) {
 		assert.Equal(t, clockGateway.Speed(), 1.0)
 	})
 
+	t.Run("returns an error when the speed is above the maximum", func(t *testing.T) {
+		// Given
+		wallNow, _ := newWallClock(t)
+		clockGateway, err := clock.NewScaledGateway(validMaxSpeed, 1, wallNow)
+		assert.NoError(t, err)
+
+		// When
+		err = clockGateway.SetSpeed(validMaxSpeed + 1)
+
+		// Then
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "at most 600")
+	})
+
 	t.Run("applies the new speed only to time that elapses afterwards", func(t *testing.T) {
 		// Given
 		wallNow, advanceWallTime := newWallClock(t)
-		clockGateway, err := clock.NewScaledGateway(1, wallNow)
+		clockGateway, err := clock.NewScaledGateway(validMaxSpeed, 1, wallNow)
 		assert.NoError(t, err)
 		advanceWallTime(10 * time.Second)
 
