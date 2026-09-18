@@ -1,0 +1,112 @@
+package scheduler
+
+import (
+	"fmt"
+	"io"
+	"sync"
+	"time"
+)
+
+type Gateway interface {
+	StartScheduledJob(jobID string, callback func() error) error
+	StopScheduledJob(jobID string) error
+}
+
+type Ticker interface {
+	C() <-chan time.Time
+	Stop()
+}
+
+type NewTickerFunc func() Ticker
+
+type job struct {
+	stop    chan struct{}
+	stopped chan struct{}
+}
+
+type tickerGateway struct {
+	jobByJobID map[string]job
+	newTicker  NewTickerFunc
+	out        io.Writer
+	mu         sync.Mutex
+}
+
+func NewTickerGateway(
+	newTicker NewTickerFunc,
+	out io.Writer,
+) Gateway {
+	return &tickerGateway{
+		jobByJobID: map[string]job{},
+		newTicker:  newTicker,
+		out:        out,
+	}
+}
+
+func NewRealTickerFunc(frequency time.Duration) NewTickerFunc {
+	return func() Ticker {
+		return realTicker{ticker: time.NewTicker(frequency)}
+	}
+}
+
+type realTicker struct {
+	ticker *time.Ticker
+}
+
+func (t realTicker) C() <-chan time.Time { return t.ticker.C }
+func (t realTicker) Stop()               { t.ticker.Stop() }
+
+func (g *tickerGateway) StartScheduledJob(jobID string, callback func() error) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if _, ok := g.jobByJobID[jobID]; ok {
+		return fmt.Errorf("job %q is already scheduled", jobID)
+	}
+
+	scheduledJob := job{
+		stop:    make(chan struct{}),
+		stopped: make(chan struct{}),
+	}
+	g.jobByJobID[jobID] = scheduledJob
+
+	go g.run(jobID, scheduledJob, callback)
+
+	return nil
+}
+
+func (g *tickerGateway) run(jobID string, scheduledJob job, callback func() error) {
+	defer close(scheduledJob.stopped)
+
+	ticker := g.newTicker()
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-scheduledJob.stop:
+			return
+		case <-ticker.C():
+			// a background job has nobody to return an error to
+			if err := callback(); err != nil {
+				fmt.Fprintf(g.out, "Error: job %q: %v\n", jobID, err)
+			}
+		}
+	}
+}
+
+// StopScheduledJob blocks until the job goroutine has exited, so no callback runs after it
+// returns. It must not be called from inside the job's own callback.
+func (g *tickerGateway) StopScheduledJob(jobID string) error {
+	g.mu.Lock()
+	scheduledJob, ok := g.jobByJobID[jobID]
+	delete(g.jobByJobID, jobID)
+	g.mu.Unlock()
+
+	if !ok {
+		return fmt.Errorf("job %q is not scheduled", jobID)
+	}
+
+	close(scheduledJob.stop)
+	<-scheduledJob.stopped
+
+	return nil
+}

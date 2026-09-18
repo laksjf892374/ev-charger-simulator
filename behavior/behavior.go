@@ -1,0 +1,149 @@
+// Package behavior makes chargers deviate from the happy path.
+//
+// A behavior is a small stateless type whose JSON form is its parameter set. It takes part in
+// the simulation by implementing one or more of the interceptor interfaces. To add a scenario:
+// write the type, implement the hooks it needs, and add one Register call in builtin.go. The
+// control API and UI pick it up from Catalog without changes.
+package behavior
+
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+	"time"
+
+	"cposim/entity"
+)
+
+type Behavior any
+
+// StartInterceptor can change how a remote start plays out.
+type StartInterceptor interface {
+	InterceptStart(attempt *StartAttempt)
+}
+
+// TickInterceptor is consulted on every simulation tick of a charging session.
+type TickInterceptor interface {
+	InterceptTick(tick *Tick)
+}
+
+type StartAttempt struct {
+	Charger entity.Charger
+	// When set, this result is reported after ResultDelay instead of trying to start.
+	ForcedResult  entity.CommandResult
+	Reject        bool
+	RejectMessage string
+	ResultDelay   time.Duration
+}
+
+type Tick struct {
+	Charger          entity.Charger
+	ChargingDuration time.Duration
+	Fault            bool
+	PowerFactor      float64
+	Session          entity.Session
+}
+
+type Info struct {
+	DefaultParams json.RawMessage `json:"default_params,omitempty"`
+	Description   string          `json:"description"`
+	Kind          string          `json:"kind"`
+}
+
+type registration struct {
+	build func(params json.RawMessage) (Behavior, error)
+	info  Info
+}
+
+var registrationByKind = map[string]registration{}
+
+// Register makes a behavior kind available. defaults supplies the value of every parameter a
+// spec leaves out.
+func Register[T Behavior](kind string, description string, defaults T) {
+	defaultParams, _ := json.Marshal(defaults)
+	if string(defaultParams) == "{}" {
+		defaultParams = nil
+	}
+
+	registrationByKind[kind] = registration{
+		build: func(params json.RawMessage) (Behavior, error) {
+			built := defaults
+			if len(params) == 0 {
+				return built, nil
+			}
+
+			if err := json.Unmarshal(params, &built); err != nil {
+				return nil, fmt.Errorf("json.Unmarshal: %w", err)
+			}
+
+			return built, nil
+		},
+		info: Info{
+			DefaultParams: defaultParams,
+			Description:   description,
+			Kind:          kind,
+		},
+	}
+}
+
+func Catalog() []Info {
+	infos := make([]Info, 0, len(registrationByKind))
+	for _, registered := range registrationByKind {
+		infos = append(infos, registered.info)
+	}
+
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].Kind < infos[j].Kind
+	})
+
+	return infos
+}
+
+func Build(specs []entity.BehaviorSpec) ([]Behavior, error) {
+	behaviors := make([]Behavior, 0, len(specs))
+	for _, spec := range specs {
+		registered, ok := registrationByKind[spec.Kind]
+		if !ok {
+			return nil, fmt.Errorf("unknown behavior kind %q", spec.Kind)
+		}
+
+		built, err := registered.build(spec.Params)
+		if err != nil {
+			return nil, fmt.Errorf("build %q: %w", spec.Kind, err)
+		}
+
+		behaviors = append(behaviors, built)
+	}
+
+	return behaviors, nil
+}
+
+func ApplyStartInterceptors(specs []entity.BehaviorSpec, attempt *StartAttempt) error {
+	behaviors, err := Build(specs)
+	if err != nil {
+		return fmt.Errorf("Build: %w", err)
+	}
+
+	for _, built := range behaviors {
+		if interceptor, ok := built.(StartInterceptor); ok {
+			interceptor.InterceptStart(attempt)
+		}
+	}
+
+	return nil
+}
+
+func ApplyTickInterceptors(specs []entity.BehaviorSpec, tick *Tick) error {
+	behaviors, err := Build(specs)
+	if err != nil {
+		return fmt.Errorf("Build: %w", err)
+	}
+
+	for _, built := range behaviors {
+		if interceptor, ok := built.(TickInterceptor); ok {
+			interceptor.InterceptTick(tick)
+		}
+	}
+
+	return nil
+}
