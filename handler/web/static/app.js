@@ -289,8 +289,8 @@
     setHTML($("receipts"), receipts || '<span class="empty">None yet.</span>');
 
     var truth = session && cpo.chargers.filter(function (c) { return c.session_id === session.id; })[0];
-    setHTML($("diverge"), "The phone only knows what the charging network tells it." + (truth && truth.active_session
-      ? " <b>Charger: " + kwh(truth.active_session.energy_delivered_kwh) + ". Phone: " + kwh(session.kwh) + ".</b>" : ""));
+    setHTML($("diverge"), (truth && truth.active_session
+      ? "<b>Charger: " + kwh(truth.active_session.energy_delivered_kwh) + ". Phone: " + kwh(session.kwh) + ".</b>" : ""));
   }
 
   $("phone-col").addEventListener("click", function (event) {
