@@ -22,6 +22,7 @@ type chargerView struct {
 	ConnectorLocked   bool     `json:"connector_locked"`
 	LiveStateOfCharge *float64 `json:"live_state_of_charge"`
 	SessionID         string   `json:"session_id"`
+	SiteID            string   `json:"site_id"`
 	State             string   `json:"state"`
 	Vehicle           *struct {
 		BatteryCapacityKWH float64 `json:"battery_capacity_kwh"`

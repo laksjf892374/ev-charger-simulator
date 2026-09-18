@@ -296,11 +296,12 @@ func TestErrorScenarios(t *testing.T) {
 		f := newMockEMSPFixture(t)
 
 		// When
-		statusCode, body := f.request(t, http.MethodPost, "/emsp/api/start", `{"location_id": "`+validHubSiteID+`", "evse_uid": "NOPE"}`)
+		command := f.phoneStart(t, validHubSiteID, "NOPE")
 
 		// Then
-		assert.Equal(t, statusCode, http.StatusBadGateway)
-		assert.Contains(t, body, "CPO answered OCPI status 2003")
+		assert.Equal(t, command.Response, mockemsp.CommandResponseRefused)
+		assert.Equal(t, command.Result, mockemsp.CommandResponseRefused)
+		assert.Contains(t, command.Message, "OCPI status 2003")
 	})
 }
 

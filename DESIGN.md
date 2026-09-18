@@ -27,7 +27,7 @@ especially the failure paths, which are the hard ones to reproduce against a rea
 
 Out of scope for v1 (each has a seam, none has code): driver authorization (RFID / real-time token
 auth), OCPI credentials handshake and token checks, tariffs module, delivery faults on the
-CPO→eMSP link (duplicate/delayed/dropped pushes), persistence, per-tester sandboxes.
+CPO→eMSP link (duplicate/delayed/dropped pushes), persistence, per-tester sandboxes, rate limiting.
 
 ## Architecture
 
@@ -88,6 +88,22 @@ hand it to the behavior, so behaviors stay stateless and every test is determini
 | `start_fails`       | accepted, then `CommandResult FAILED` after a delay; no session |
 | `start_timeout`     | accepted, then `CommandResult TIMEOUT` after a long wait        |
 | `fault_mid_session` | session ends early, EVSE goes `OUTOFORDER`, CDR for partial energy |
+
+## Operating it
+
+- **Reset.** `app` separates the *simulator* (HTTP entry point, tick, logging, metrics) from a
+  *world* (one complete simulation). `POST /api/reset` builds a new world, makes it current, seeds
+  it, and lets the old one go. `world_id` tells clients their state is stale. Per-tester sandboxes
+  would be a map of worlds behind the same entry point.
+- **Health means the simulation, not the server.** `/healthz` fails when the tick has been silent
+  for five seconds; a process whose clock had died would otherwise answer requests forever. A
+  panicking tick is recovered, logged and counted, not fatal.
+- **Bounded by construction.** Everything a caller can create is capped or forgotten oldest-first,
+  everything a caller can configure is range-checked, and a slow or dead eMSP can only fill a
+  queue whose overflow is dropped and counted: it cannot stall the simulation.
+- **Tested against sequences nobody thought of.** Alongside unit tests and scripted scenarios, a
+  seeded random walk checks the world's invariants after every step, and a stress test does the
+  same with concurrent clients under the race detector.
 
 ## Deployment
 

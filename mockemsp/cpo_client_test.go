@@ -25,7 +25,7 @@ func TestPullLocations(t *testing.T) {
 
 		// Then
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "CPO answered OCPI status 3000: boom")
+		assert.Contains(t, err.Error(), "CPO refused: OCPI status 3000: boom")
 	})
 
 	t.Run("follows the Link header until the last page", func(t *testing.T) {
@@ -54,6 +54,23 @@ func TestPullLocations(t *testing.T) {
 }
 
 func TestSendCommand(t *testing.T) {
+	t.Run("reports an OCPI error status as a refusal rather than a failure to reach the CPO", func(t *testing.T) {
+		// Given
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			io.WriteString(w, `{"status_code": 2003, "status_message": "unknown EVSE"}`)
+		}))
+		defer server.Close()
+
+		// When
+		response, err := mockemsp.NewHTTPCPOClient(server.URL).SendCommand("START_SESSION", ocpi.StartSession{})
+
+		// Then
+		assert.NoError(t, err)
+		assert.Equal(t, response.Result, mockemsp.CommandResponseRefused)
+		assert.Equal(t, response.Message[0].Text, "OCPI status 2003: unknown EVSE")
+	})
+
 	t.Run("posts the command as JSON and returns the CPO's synchronous answer", func(t *testing.T) {
 		// Given
 		var receivedPath, receivedBody string

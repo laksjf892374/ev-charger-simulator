@@ -50,9 +50,13 @@ func (c httpCPOClient) PullLocations() ([]ocpi.Location, error) {
 		}
 
 		var pageLocations []ocpi.Location
-		err = decodeEnvelope(response, &pageLocations)
+		refusal, err := decodeEnvelope(response, &pageLocations)
 		if err != nil {
 			return nil, fmt.Errorf("decodeEnvelope: %w", err)
+		}
+
+		if refusal != "" {
+			return nil, fmt.Errorf("CPO refused: %s", refusal)
 		}
 
 		locations = append(locations, pageLocations...)
@@ -66,7 +70,9 @@ func (c httpCPOClient) PullLocations() ([]ocpi.Location, error) {
 	return locations, nil
 }
 
-func decodeEnvelope(response *http.Response, data any) error {
+// decodeEnvelope unwraps an OCPI response. A refusal is the CPO understanding the request and
+// saying no (an OCPI status other than 1000); an error is not getting a usable answer at all.
+func decodeEnvelope(response *http.Response, data any) (refusal string, err error) {
 	defer response.Body.Close()
 
 	var envelope struct {
@@ -75,18 +81,18 @@ func decodeEnvelope(response *http.Response, data any) error {
 		StatusMessage string          `json:"status_message"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
-		return fmt.Errorf("json.Decode: %w", err)
+		return "", fmt.Errorf("json.Decode: %w", err)
 	}
 
 	if envelope.StatusCode != ocpi.StatusCodeSuccess {
-		return fmt.Errorf("CPO answered OCPI status %d: %s", envelope.StatusCode, envelope.StatusMessage)
+		return fmt.Sprintf("OCPI status %d: %s", envelope.StatusCode, envelope.StatusMessage), nil
 	}
 
 	if err := json.Unmarshal(envelope.Data, data); err != nil {
-		return fmt.Errorf("json.Unmarshal: %w", err)
+		return "", fmt.Errorf("json.Unmarshal: %w", err)
 	}
 
-	return nil
+	return "", nil
 }
 
 func (c httpCPOClient) SendCommand(kind string, request any) (ocpi.CommandResponse, error) {
@@ -105,8 +111,17 @@ func (c httpCPOClient) SendCommand(kind string, request any) (ocpi.CommandRespon
 	}
 
 	var commandResponse ocpi.CommandResponse
-	if err := decodeEnvelope(response, &commandResponse); err != nil {
+	refusal, err := decodeEnvelope(response, &commandResponse)
+	if err != nil {
 		return ocpi.CommandResponse{}, fmt.Errorf("decodeEnvelope: %w", err)
+	}
+
+	// To the driver a refused request is an outcome like REJECTED, not a broken connection.
+	if refusal != "" {
+		return ocpi.CommandResponse{
+			Message: []ocpi.DisplayText{{Language: "en", Text: refusal}},
+			Result:  CommandResponseRefused,
+		}, nil
 	}
 
 	return commandResponse, nil

@@ -15,7 +15,9 @@ import (
 )
 
 const (
-	CommandResultPending = "PENDING"
+	// The CPO answered with an OCPI error status instead of a CommandResponse.
+	CommandResponseRefused = "REFUSED_BY_CPO"
+	CommandResultPending   = "PENDING"
 
 	// The mock keeps only its most recent history: it lives in the same small process as the CPO.
 	maxStoredCDRs     = 200

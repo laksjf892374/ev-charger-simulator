@@ -15,8 +15,9 @@ app (an **eMSP**) can be tested end to end without a partner sandbox or a physic
 ## Run it
 
 ```sh
-go run .            # http://localhost:8080
-go test -race ./...
+go run .                   # http://localhost:8080
+go test -race ./...        # everything, ~45 s
+go test -race -short ./... # quick loop, ~10 s: shortens the random-walk and stress tests
 ```
 
 Go 1.26, standard library only. No database, no build step, no frontend toolchain.
@@ -78,6 +79,23 @@ curl 'localhost:8080/api/trace?since=0'
 
 A refused physical action (unplugging a locked cable) is `409`; a rejected configuration is `422`.
 
+Operations:
+
+```sh
+curl -X POST localhost:8080/api/reset    # throw the world away and start again from the demo data
+curl localhost:8080/healthz              # 503 once the simulation clock has been silent for 5 s
+curl localhost:8080/api/metrics          # pushes sent/failed/dropped, commands by result, ticks, requests, gauges
+```
+
+Every request is logged to stdout as one JSON line (successful polls excepted). `/api/state`
+carries a `world_id` that changes on reset, so a client holding older state knows to start over.
+
+Guardrails, because an instance may be public and everything is in memory: at most 50 chargers, 20
+sites and 8 behaviors per charger; IDs are 1-36 characters of `A-Z a-z 0-9 _ -`; power, price,
+vehicle, coordinates, behavior params and clock speed (max 600x) are range-checked; the last 500
+completed sessions (with their CDRs) and finished commands are kept and older ones forgotten;
+request bodies are capped; the HTTP server has read, write and idle timeouts.
+
 | behavior kind           | what the eMSP sees                                                        |
 |-------------------------|---------------------------------------------------------------------------|
 | `realistic_reliability` | **default.** a share of starts `FAILED` (`start_failure_rate`, 5%); occasional mid-session fault (`session_faults_per_hour`, 0.02) |
@@ -95,6 +113,20 @@ A deliberately naive eMSP so the loop can be seen without a real one: an OCPI re
 `/emsp/ocpi/2.2.1`, and the "driver's phone" API (`GET /emsp/api/state`,
 `POST /emsp/api/{start,stop,unlock,sync}`). It talks to the simulator only over HTTP and believes
 whatever it is told, which is what makes a misbehaving CPO visible.
+
+## Tests
+
+- **Unit tests** per package: fakes not mocks, fake clock, no sleeps.
+- **Scenarios** (`app/scenarios_test.go`): whole user stories through the public APIs of a running
+  simulator with the mock eMSP mounted: happy paths, error cases, operator mistakes, and
+  operations (reset, health, metrics, logging).
+- **Invariants** (`app/invariants_test.go`): seeded random walks of hundreds of actions, checking
+  after every step what must always be true (a CHARGING charger has a car, a locked cable and
+  exactly one active session; energy never goes down or exceeds the battery; one CDR per completed
+  session, matching it; never a 5xx). A failure prints the seed's last actions.
+- **Concurrency**: many clients acting at once while the simulation ticks, under the race
+  detector, with a deadlock timeout, then the same invariants.
+- CI runs gofmt, vet and the full race suite before every deploy.
 
 ## Deploy
 

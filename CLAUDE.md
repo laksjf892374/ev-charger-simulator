@@ -7,6 +7,7 @@ See `DESIGN.md` for the why; this file is the how.
 ## Commands
 
 ```sh
+go test -short ./...                     # quick loop: shortens the random-walk and stress tests
 go test ./...                            # full test suite
 go test -race ./...                      # use this when touching goroutines, the scheduler, or controllers
 go test ./controller/charger -run TestTick   # single package / test
@@ -62,10 +63,19 @@ main → app (DI root) → handler/* → controller/command → controller/charg
   only what the mock eMSP believes. Keep that separation: it is the point of the demo.
 - `gateway/random` — the only source of randomness. Controllers draw one roll per start attempt
   and one per charger per tick and hand it to behaviors, which never draw their own.
-- `app/` — DI root: the only place that constructs concrete implementations, holds the tunable
-  constants, and seeds the demo world. `app/simulator_test.go` and `app/mock_emsp_test.go` are the
-  end-to-end tests: real HTTP, `scheduler.FakeTicker`, a fake wall clock, and either
-  `app.FakeEMSP` (records pushes) or the mounted mock eMSP.
+- `gateway/metrics` — process-wide named counters and gauges, served with derived gauges at
+  `/api/metrics`. Add a name constant there when adding a metric.
+- `app/` — DI root, in two halves. `world.go` builds one complete, self-contained simulation
+  (clock, repositories, controllers, OCPI adapter, mock eMSP) and holds the tunable constants and
+  limits; `simulator.go` owns what outlives a world: the HTTP entry point, the tick, `/healthz`,
+  `/api/reset`, request logging (`logging.go`) and metrics. Reset swaps in a new world *before*
+  seeding it, because seeding pushes to the mock eMSP through this same server. Anything new that
+  holds simulation state belongs in the world, or reset will not reset it. The `app` tests are end to end: real HTTP, `scheduler.FakeTicker`, a fake
+  wall clock, and either `app.FakeEMSP` (records pushes) or the mounted mock eMSP.
+  `scenarios_test.go` tells whole user stories with the helpers in `scenario_helpers_test.go`
+  (add a scenario there for any new user-visible behaviour); `invariants_test.go` is the seeded
+  random walk and the concurrency stress test (add an invariant there for any new state rule, and
+  a weighted action for any new way to change the world).
 - `mockemsp/` — a deliberately naive eMSP (OCPI receiver + a tiny "driver's app" API under
   `/emsp/...`) so the simulator can be demonstrated without a real one. It is a guest at the edge:
   only `app` and `main` import it, it is handed URLs rather than controllers, and it talks to the
@@ -176,6 +186,15 @@ tick drives all chargers (no per-session jobs), so a session can end itself from
   gateway's own tests use `scheduler.FakeTicker.Tick()`.
 - Anything that could block has a 1-second safety timeout and returns an `error` (asserted with
   `assert.NoError`) instead of hanging the suite.
+
+## Guardrails
+
+An instance may be public and unauthenticated, and everything is in memory. Whatever a caller can
+create must be capped or forgotten (`maxChargers`, `maxSites`, `maxCompletedSessions`,
+`maxFinishedCommands` in `app/world.go`; `behavior.MaxBehaviorsPerCharger`; the mock eMSP's
+`maxStored…`). Whatever a caller can configure must be range-checked where it enters the core
+(`validateSite`, `validateVehicle`, `AddCharger`, `clock.validateSpeed`, `behavior.Validator`).
+IDs appear in URL paths and OCPI fields: they must match `validID`.
 
 ## Adding things
 
