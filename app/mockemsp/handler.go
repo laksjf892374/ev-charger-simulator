@@ -1,3 +1,10 @@
+// Package mockemsp is a deliberately small eMSP: the backend of a driver's charging app. It exists
+// so the simulator can be demonstrated without a real eMSP, and it sits at the edge of the
+// system: it talks to the CPO only over HTTP, exactly like a real eMSP would, and nothing
+// imports it except the DI root and main.
+//
+// It is naive on purpose. It believes whatever the CPO pushes, in the order it arrives, which
+// makes the consequences of a misbehaving CPO easy to see.
 package mockemsp
 
 import (

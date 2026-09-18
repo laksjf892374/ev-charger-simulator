@@ -1,13 +1,13 @@
 package mockemsp
 
-// The app endpoints: what the driver's phone calls.
-
 import (
 	"fmt"
 	"net/http"
 
 	"cposim/ocpi"
 )
+
+// The app endpoints: what the driver's phone calls.
 
 type errorResponse struct {
 	Error string `json:"error"`

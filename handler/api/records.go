@@ -1,5 +1,3 @@
-// Package api is the simulator's control API: everything a person (or a CI script) can do to the
-// simulated world. The UI has no private endpoints; it is just one client of this API.
 package api
 
 import (

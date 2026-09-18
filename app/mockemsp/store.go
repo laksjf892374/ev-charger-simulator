@@ -1,10 +1,3 @@
-// Package mockemsp is a deliberately small eMSP: the backend of a driver's charging app. It exists
-// so the simulator can be demonstrated without a real eMSP, and it sits at the edge of the
-// system: it talks to the CPO only over HTTP, exactly like a real eMSP would, and nothing in the
-// simulator imports it except the DI root.
-//
-// It is naive on purpose. It believes whatever the CPO pushes, in the order it arrives, which
-// makes the consequences of a misbehaving CPO easy to see.
 package mockemsp
 
 import (
@@ -23,8 +16,6 @@ const (
 	maxStoredCDRs     = 200
 	maxStoredCommands = 200
 	maxStoredSessions = 200
-
-	evseStatusRemoved = "REMOVED"
 )
 
 // Command is a request the driver's app made, and what came of it.
@@ -115,7 +106,7 @@ func (s *store) putEVSE(locationID string, evse ocpi.EVSE) {
 		}
 	}
 
-	if evse.Status != evseStatusRemoved {
+	if evse.Status != ocpi.EVSEStatusRemoved {
 		evses = append(evses, evse)
 	}
 

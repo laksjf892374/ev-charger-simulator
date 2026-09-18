@@ -36,8 +36,8 @@ const (
 	sessionUpdateInterval    = 30 * time.Second
 	startTimeout             = 60 * time.Second
 
-	currency    = "USD"
 	countryCode = "US"
+	currency    = "USD"
 	partyID     = "SIM"
 	timeZone    = "America/Los_Angeles"
 

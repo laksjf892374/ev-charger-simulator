@@ -26,7 +26,11 @@ Go 1.26, standard library only. No database, no build step.
 ## If you build charging apps
 
 The simulator is a Charge Point Operator speaking OCPI 2.2.1. Point it at your own backend with
-`EMSP_BASE_URL=https://your-emsp/ocpi/2.2.1 go run .` and script it from CI:
+`EMSP_BASE_URL=https://your-emsp/ocpi/2.2.1 go run .` and script it from CI.
+
+One caveat, stated plainly: partner authentication is not implemented yet. The simulator accepts
+any caller, and its pushes carry no `Authorization` token or OCPI request-ID headers, so a backend
+that enforces those will reject them until that is added. Everything else in the charging flow is real OCPI.
 
 ```sh
 curl -X POST localhost:8080/api/chargers/EVSE-000001/actions/plug-in

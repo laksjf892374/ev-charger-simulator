@@ -11,11 +11,6 @@ import (
 	"cposim/ocpi"
 )
 
-const (
-	commandResponseNotSupported   = "NOT_SUPPORTED"
-	commandResponseUnknownSession = "UNKNOWN_SESSION"
-)
-
 func (h handler) postCommand(w http.ResponseWriter, r *http.Request) {
 	commandType := entity.CommandKind(r.PathValue("command_type"))
 	describe(r, "eMSP sends a %s command", commandType)
@@ -28,7 +23,7 @@ func (h handler) postCommand(w http.ResponseWriter, r *http.Request) {
 	case entity.CommandKindUnlockConnector:
 		h.postUnlockConnector(w, r)
 	default:
-		h.respondCommand(w, r, commandResponseNotSupported, fmt.Sprintf("command %q is not supported", commandType))
+		h.respondCommand(w, r, ocpi.CommandResponseNotSupported, fmt.Sprintf("command %q is not supported", commandType))
 	}
 }
 
@@ -124,7 +119,7 @@ func (h handler) postStopSession(w http.ResponseWriter, r *http.Request) {
 	describe(r, "eMSP asks the CPO to stop session %s", request.SessionID)
 
 	if _, err := h.sessionController.GetSession(request.SessionID); err != nil {
-		h.respondCommand(w, r, commandResponseUnknownSession, fmt.Sprintf("unknown session %q", request.SessionID))
+		h.respondCommand(w, r, ocpi.CommandResponseUnknownSession, fmt.Sprintf("unknown session %q", request.SessionID))
 		return
 	}
 

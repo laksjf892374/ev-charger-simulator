@@ -11,6 +11,7 @@ import (
 const (
 	Version = "2.2.1"
 
+	// in numeric order, as the OCPI specification lists them
 	StatusCodeSuccess         = 1000
 	StatusCodeClientError     = 2000
 	StatusCodeInvalidParams   = 2001
@@ -211,8 +212,10 @@ type UnlockConnector struct {
 }
 
 const (
-	CommandResponseAccepted = "ACCEPTED"
-	CommandResponseRejected = "REJECTED"
+	CommandResponseAccepted       = "ACCEPTED"
+	CommandResponseNotSupported   = "NOT_SUPPORTED"
+	CommandResponseRejected       = "REJECTED"
+	CommandResponseUnknownSession = "UNKNOWN_SESSION"
 )
 
 // CommandResponse is the synchronous answer to a command.

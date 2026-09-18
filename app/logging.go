@@ -5,12 +5,13 @@ import (
 
 	"cposim/app/mockemsp"
 	"cposim/gateway/metrics"
+	"cposim/handler/api"
 )
 
 // Pages left open poll these every second. Logging each successful poll would bury everything
 // else, so they are only logged when they fail.
-var pollingPaths = map[string]bool{
-	"/api/state":                     true,
+var isPolledByPath = map[string]bool{
+	api.BasePath + "/state":          true,
 	HealthPath:                       true,
 	mockemsp.BasePath + "/api/state": true,
 }
@@ -28,7 +29,7 @@ func (s *simulator) logged(next http.Handler) http.Handler {
 			s.metricsGateway.Add(metrics.HTTPServerErrors, 1)
 		}
 
-		if pollingPaths[r.URL.Path] && r.Method == http.MethodGet && recorder.statusCode < http.StatusBadRequest {
+		if isPolledByPath[r.URL.Path] && r.Method == http.MethodGet && recorder.statusCode < http.StatusBadRequest {
 			return
 		}
 

@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"time"
 
 	"cposim/controller/behavior"
 	"cposim/entity"
@@ -46,6 +47,75 @@ func (c *controller) StartSession(input StartSessionInput) (entity.Command, erro
 	}
 
 	return command, nil
+}
+
+func (c *controller) newCommand(
+	kind entity.CommandKind,
+	callbackReference string,
+	resultDelay time.Duration,
+) entity.Command {
+	now := c.clockGateway.Now()
+
+	return entity.Command{
+		CallbackReference: callbackReference,
+		CommandID:         c.identifierGateway.NewID(commandIDPrefix),
+		CreatedAt:         now,
+		DeadlineAt:        now.Add(c.config.StartTimeout),
+		Kind:              kind,
+		ReadyAt:           now.Add(resultDelay),
+		State:             entity.CommandStatePending,
+	}
+}
+
+func (c *controller) updateCommand(command entity.Command) error {
+	command.UpdatedAt = c.clockGateway.Now()
+
+	if err := c.commandRepository.Upsert(command); err != nil {
+		return fmt.Errorf("commandRepository.Upsert: %w", err)
+	}
+
+	if err := c.eventsGateway.PublishCommandEvent(command); err != nil {
+		return fmt.Errorf("eventsGateway.PublishCommandEvent: %w", err)
+	}
+
+	if command.State == entity.CommandStatePending {
+		return nil
+	}
+
+	if err := c.forgetOldestFinished(); err != nil {
+		return fmt.Errorf("forgetOldestFinished: %w", err)
+	}
+
+	return nil
+}
+
+// forgetOldestFinished drops finished commands beyond the retention limit, oldest first. IDs are
+// sequential, so list order is age order. Pending commands are never dropped.
+func (c *controller) forgetOldestFinished() error {
+	commands, err := c.commandRepository.List()
+	if err != nil {
+		return fmt.Errorf("commandRepository.List: %w", err)
+	}
+
+	finishedCommandIDs := []string{}
+	for _, command := range commands {
+		if command.State != entity.CommandStatePending {
+			finishedCommandIDs = append(finishedCommandIDs, command.CommandID)
+		}
+	}
+
+	excess := len(finishedCommandIDs) - c.config.MaxFinishedCommands
+	if excess <= 0 {
+		return nil
+	}
+
+	for _, commandID := range finishedCommandIDs[:excess] {
+		if err := c.commandRepository.Delete(commandID); err != nil {
+			return fmt.Errorf("commandRepository.Delete: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (c *controller) StopSession(input StopSessionInput) (entity.Command, error) {

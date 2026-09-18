@@ -6,18 +6,21 @@ import (
 	"time"
 )
 
-const fakeSenderTimeout = time.Second
+const (
+	fakeSenderBufferSize = 1024
+	fakeSenderTimeout    = time.Second
+)
 
 type FakeSender struct {
 	SendCalledWith []Push
 	SendErr        error
-	mu             sync.Mutex
 	sent           chan struct{}
+	mu             sync.Mutex
 }
 
 func NewFakeSender() *FakeSender {
 	return &FakeSender{
-		sent: make(chan struct{}, 1024),
+		sent: make(chan struct{}, fakeSenderBufferSize),
 	}
 }
 

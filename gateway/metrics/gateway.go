@@ -3,11 +3,18 @@ package metrics
 import "sync"
 
 const (
+	CDRsKept               = "cdrs_kept"
+	Chargers               = "chargers"
+	ChargersInStatePrefix  = "chargers_"
+	CommandsPending        = "commands_pending"
 	CommandsRejected       = "commands_rejected_total"
 	CommandsResolvedPrefix = "commands_resolved_total_"
 	HTTPRequests           = "http_requests_total"
 	HTTPServerErrors       = "http_server_errors_total"
 	LastTickDurationMicros = "last_tick_duration_micros"
+	SessionsActive         = "sessions_active"
+	SessionsKept           = "sessions_kept"
+	Sites                  = "sites"
 	PushQueueDepth         = "push_queue_depth"
 	PushesDropped          = "pushes_dropped_total"
 	PushesFailed           = "pushes_failed_total"

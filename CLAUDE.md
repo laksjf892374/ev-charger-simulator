@@ -43,7 +43,7 @@ main → app (DI root) → handler/* → controller/command → controller/charg
   result as `TotalCost`; the CDR, the OCPI mapper and the UI copy it and must never recompute it.
   Real tariffs replace that function (probably with a pure `pricing` package, shaped like
   `behavior`) and nothing else.
-- `behavior/` — the fault/scenario registry. Several behaviors on one charger apply in list order;
+- `controller/behavior/` — the charger behavior registry. Several behaviors on one charger apply in list order;
   a refusal or fault is final, everything else is last-writer-wins (package doc, pinned by tests). Stateless types implementing `StartInterceptor`
   and/or `TickInterceptor`, configured per charger as `entity.BehaviorSpec`. Pure logic, so
   controllers call it directly rather than through an interface.
@@ -67,8 +67,8 @@ main → app (DI root) → handler/* → controller/command → controller/charg
   endpoints of its own. The left column shows ground truth from the control API; the phone shows
   only what the mock eMSP believes. Keep that separation: it is the point of the demo. The page is for someone who has never heard
   of EV roaming: by default it shows one sentence, three steps with the next button highlighted,
-  plain names ("Charger 1", "Free") and nothing else. Anything more (behaviors, add/remove, speed,
-  reset, technical IDs and states) carries the `adv` class and appears only with *Simulator
+  plain names ("Charger 1", "Free"), a Reset button, and nothing else. Anything more (behaviors, add/remove, speed,
+  technical IDs and states) carries the `adv` class and appears only with *Simulator
   controls* on; explanations and the message log live in the collapsed *What's really going on?*.
   New UI follows the same rule: if a first-time visitor does not need it, it is `adv`.
 - `gateway/random` — the only source of randomness. Controllers draw one roll per start attempt
@@ -82,11 +82,11 @@ main → app (DI root) → handler/* → controller/command → controller/charg
   seeding it, because seeding pushes to the mock eMSP through this same server. Anything new that
   holds simulation state belongs in the world, or reset will not reset it. The `app` tests are end to end: real HTTP, `scheduler.FakeTicker`, a fake
   wall clock, and either `app.FakeEMSP` (records pushes) or the mounted mock eMSP.
-  `scenarios_test.go` tells whole user stories with the helpers in `scenario_helpers_test.go`
+  `scenarios_*_test.go` tell whole user stories with the helpers in `scenario_helpers_test.go`
   (add a scenario there for any new user-visible behaviour); `invariants_test.go` is the seeded
   random walk and the concurrency stress test (add an invariant there for any new state rule, and
   a weighted action for any new way to change the world).
-- `mockemsp/` — a deliberately naive eMSP (OCPI receiver + a tiny "driver's app" API under
+- `app/mockemsp/` — a deliberately naive eMSP (OCPI receiver + a tiny "driver's app" API under
   `/emsp/...`) so the simulator can be demonstrated without a real one. It is a guest at the edge:
   only `app` and `main` import it, it is handed URLs rather than controllers, and it talks to the
   CPO only over HTTP, like a real eMSP. It may import `ocpi` for wire types, nothing else.
@@ -108,22 +108,25 @@ tick drives all chargers (no per-session jobs), so a session can end itself from
 ## Code conventions
 
 **Packages & naming**
-- Package name is the domain noun (`charger`, `session`, `events`, `scheduler`, `cli`), so types
+- Package name is the domain noun (`charger`, `session`, `events`, `scheduler`, `api`), so types
   are just `Controller`, `Gateway`, `Repository`, `Handler` and read as `charger.Controller`.
 - Because `repository/charger` and `controller/charger` collide, repositories are always imported
   with an alias: `chargerrepo`, `sessionrepo`.
 - Descriptive, unabbreviated variable names that repeat the role: `chargerRepository`,
-  `eventsGateway`, `sessionController`, `normalizedCommand`, `successfulScan`. Maps are named
-  `<value>By<Key>` (`sessionBySessionID`, `cancelFuncsByJobID`).
-- Units go in the name: `PowerKW`, `EnergyDeliveredKWH`, `maxPowerJitterPercent`.
+  `eventsGateway`, `sessionController`, `targetCharger`, `activeSession`. Maps are named
+  `<value>By<Key>` (`jobByJobID`, `lastPublishedAtBySessionID`, `isPolledByPath`).
+- Units go in the name: `PowerKW`, `EnergyDeliveredKWH`, `tickIntervalWall`. A duration between
+  events is an *interval*, not a frequency.
 - Struct fields, interface methods, const blocks, and constructor parameters are kept in
   **alphabetical order** (a `mu` mutex goes last). Constructor args mirror the struct field order.
+  Blank-line-separated groups in a const block are each ordered on their own. The one exception
+  is `ocpi.StatusCode…`, which follows the specification's numeric order.
 
 **Interfaces & constructors**
 - Exported interface + unexported implementation struct + exported constructor returning the
   interface: `NewController(...) Controller`, `NewInMemoryRepository() Repository`,
-  `NewPrintGateway(w) Gateway`, `NewTickerGateway(...) Gateway`. Implementation names describe the
-  mechanism (`inMemoryRepository`, `printGateway`, `tickerGateway`).
+  `NewScaledGateway(...) Gateway`, `NewTickerGateway(...) Gateway`. Implementation names describe
+  the mechanism (`inMemoryRepository`, `scaledGateway`, `tickerGateway`).
 - Value receivers for stateless structs; pointer receivers (and a returned `&impl{}`) only when the
   struct holds a mutex or mutable maps.
 - Constructors validate their config and return `(T, error)` when there is something to validate
@@ -149,8 +152,13 @@ tick drives all chargers (no per-session jobs), so a session can end itself from
 - Blank line after a guard block and before the final `return`.
 - Comments are rare and explain *why* (a non-obvious invariant, a known limitation such as
   `// ideally atomic operation starting here`). No doc comments restating the name.
-- Named results only where they document a bare bool: `(shouldQuit bool)`.
-- Magic values become named constants (`sessionUpdateFrequency`, `CommandStart`).
+- Named results only where they document a bare value: `(refusal string, err error)`.
+- Magic values become named constants (`sessionUpdateInterval`, `maxTickAge`, `ActionPlugIn`).
+- **One file per concern, not one file per package.** `controller.go` / `handler.go` holds the
+  interface, struct, constructor and shared helpers, and carries the package doc (no other file
+  repeats it); the methods live in files named for what they do (`sites.go`, `actions.go`,
+  `metering.go`, `billing.go`, …), each exported method followed by its helpers. A helper lives in
+  the file of its first caller. Test files mirror the split. Past roughly 250 lines, split.
 
 **Concurrency**
 - Shared state is protected with a mutex locked at the top of the method with `defer Unlock()`.
@@ -159,7 +167,9 @@ tick drives all chargers (no per-session jobs), so a session can end itself from
   inside the job's own callback.
 - Controller locks are only ever taken top-down (`command` → `charger` → `session`). A lower
   controller never calls a higher one.
-- Errors inside a background job can't be returned, so they're written to the injected `out`.
+- Errors inside a background job can't be returned, so they're logged. Everything the process
+  reports goes through one injected `*slog.Logger` (JSON lines): requests, failed ticks, failed or
+  dropped pushes. Never `fmt.Print*` outside `main.go`.
 
 ## Testing conventions
 
@@ -173,14 +183,16 @@ tick drives all chargers (no per-session jobs), so a session can end itself from
 - Assertions use the in-repo `assert` package only: `assert.Equal(t, got, want)` (got first),
   `NotEqual`, `NoError`, `Error`, `Contains`, `NotContains`. They are `t.Fatalf`-based. Compute
   non-comparable things into a local first (`chargerEventCount := len(...)`). Add a new helper to
-  `assert/assert.go` (with `t.Helper()`) rather than hand-writing `if got != want`.
+  `internal/assert/assert.go` (with `t.Helper()`) rather than hand-writing `if got != want`. The
+  scenario and invariant tests in `app` are the exception: where a failure needs the story so far
+  (the last random actions, the request that was refused), they call `t.Fatalf` with that context.
 - Test helpers take `t *testing.T` first and call `t.Helper()` (`seedCharger`,
   `newSessionController`). Shared valid config lives in `valid…` constants at the top of the file.
 - Injected failures use `errors.New("boom")`.
 
 **Fakes, not mocks**
-- Every gateway and controller interface has a hand-written `Fake<Type>` in `fake_<name>.go` **next to the production
-  implementation, in the non-test package** (so other packages' tests can import it), with a
+- Every gateway and controller interface has a hand-written `Fake<Type>` in `fake_<name>.go`
+  **next to the production implementation, in the non-test package** (so other packages' tests can import it), with a
   `NewFake<Type>()` constructor returning a pointer.
 - Fakes are configured and inspected through exported fields: `<Method>Result`, `<Method>Err`,
   `<Method>CalledWith` / `…Calls` / recorded event slices. No expectation DSL.
@@ -189,11 +201,21 @@ tick drives all chargers (no per-session jobs), so a session can end itself from
 - Use the real in-memory repository in controller tests (repositories have no fakes yet — they
   cannot fail; add one when an error-path test needs it). `identifier.NewSequentialGateway()` is
   deterministic and is also used for real. Fake the other gateways and collaborating controllers.
+- Deliberate exceptions, so nobody "fixes" them: repositories, `identifier.Gateway` and
+  `metrics.Gateway` have no fake because their real in-memory implementations are deterministic
+  and cannot fail; `scheduler.Gateway` has none because tests drive it through `FakeTicker`; and
+  the fake eMSP used by the `app` tests lives in `app/fake_emsp_helper_test.go`, not the non-test
+  package, because it needs `net/http/httptest`, which must not be linked into the binary.
+- `charger.FakeController` records `StartCharging`, `StopCharging` and `UnlockConnector` per
+  method and every other mutation as a `MutationCall`; give a method its own fields when a test
+  needs its arguments.
 
 **Time and goroutines in tests**
 - Never `time.Sleep` and never wait on real tickers. Controllers expose a synchronous `Tick()`;
-  tests move `clock.FakeGateway` with `Advance(...)` and call `Tick()` directly. Only the scheduler
-  gateway's own tests use `scheduler.FakeTicker.Tick()`.
+  tests move `clock.FakeGateway` with `Advance(...)` and call `Tick()` directly.
+  `scheduler.FakeTicker.Tick()` is for the scheduler gateway's own tests and for the end-to-end
+  `app` tests, where the real tick job runs (tick twice: the second returning proves the first
+  tick's callback has finished).
 - Anything that could block has a 1-second safety timeout and returns an `error` (asserted with
   `assert.NoError`) instead of hanging the suite.
 
@@ -208,11 +230,11 @@ IDs appear in URL paths and OCPI fields: they must match `validID`.
 
 ## Adding things
 
-- **New fault/scenario:** a type in `behavior/builtin.go` implementing the interceptor(s) it needs,
+- **New charger behavior:** a type in `controller/behavior/builtin.go` implementing the interceptor(s) it needs,
   a `Kind…` constant, one `Register` call with default params, and tests in
-  `behavior/behavior_test.go`. No controller, API or UI change is needed.
+  `controller/behavior/behavior_test.go`. No controller, API or UI change is needed.
 - **New interception point** (e.g. stop commands): a new `…Interceptor` interface + context struct
-  + `Apply…Interceptors` in `behavior/behavior.go`, called from the owning controller.
+  + `Apply…Interceptors` in `controller/behavior/behavior.go`, called from the owning controller.
 - **New dependency/collaborator:** interface + unexported impl + constructor + `Fake…` +
   `fake_…_test.go` in its own package, then wire it in `app` only.
 - Keep `DESIGN.md` in sync when packages or interface methods change.

@@ -1,52 +1,14 @@
-// Package api is the simulator's control API: everything a person (or a CI script) can do to the
-// simulated world. The UI has no private endpoints; it is just one client of this API.
 package api
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"cposim/controller/behavior"
 	"cposim/entity"
 	"cposim/gateway/trace"
 )
-
-// getMetrics serves the process-wide counters plus gauges derived from the current world, so one
-// call answers both "is it healthy?" and "what is in it right now?".
-func (h handler) getMetrics(w http.ResponseWriter, r *http.Request) {
-	state, err := h.stateView(math.MaxInt)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Errorf("stateView: %w", err))
-		return
-	}
-
-	snapshot := h.metricsGateway.Snapshot()
-	snapshot["cdrs_kept"] = int64(len(state.CDRs))
-	snapshot["chargers"] = int64(len(state.Chargers))
-	snapshot["sessions_kept"] = int64(len(state.Sessions))
-	snapshot["sites"] = int64(len(state.Sites))
-
-	for _, viewed := range state.Chargers {
-		snapshot["chargers_"+strings.ToLower(string(viewed.State))]++
-	}
-
-	for _, listedSession := range state.Sessions {
-		if listedSession.State == entity.SessionStateActive {
-			snapshot["sessions_active"]++
-		}
-	}
-
-	for _, listedCommand := range state.Commands {
-		if listedCommand.State == entity.CommandStatePending {
-			snapshot["commands_pending"]++
-		}
-	}
-
-	respond(w, http.StatusOK, snapshot)
-}
 
 // stateView is everything a dashboard needs in one poll.
 type stateView struct {

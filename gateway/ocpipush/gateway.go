@@ -108,24 +108,8 @@ func (g *pushGateway) Stop() {
 	<-g.stopped
 }
 
-// enqueue never blocks: publishers hold controller locks, so a slow or dead eMSP must not be able
-// to stall the simulation. When the queue is full the push is dropped and reported, but the
-// publisher is not failed: the state change has already happened, and a real eMSP recovers from a
-// missed push by pulling.
-func (g *pushGateway) enqueue(description string, buildPush func() Push) error {
-	select {
-	case g.queue <- buildPush:
-		g.metricsGateway.Set(metrics.PushQueueDepth, int64(len(g.queue)))
-	default:
-		g.metricsGateway.Add(metrics.PushesDropped, 1)
-		g.logger.Error("push dropped, queue is full", "push", description)
-	}
-
-	return nil
-}
-
 func (g *pushGateway) PublishCDREvent(cdr entity.CDR) error {
-	return g.enqueue("CDR "+cdr.CDRID, func() Push {
+	g.enqueue("CDR "+cdr.CDRID, func() Push {
 		// best effort: a CDR for a since-removed charger is still valid, just less descriptive
 		site, _ := g.siteRepository.Get(cdr.SiteID)
 		charger, _ := g.chargerRepository.Get(cdr.ChargerID)
@@ -141,10 +125,26 @@ func (g *pushGateway) PublishCDREvent(cdr entity.CDR) error {
 			URL: g.config.EMSPBaseURL + "/cdrs",
 		}
 	})
+
+	return nil
+}
+
+// enqueue never blocks: publishers hold controller locks, so a slow or dead eMSP must not be able
+// to stall the simulation. When the queue is full the push is dropped and reported, but the
+// publisher is not failed: the state change has already happened, and a real eMSP recovers from a
+// missed push by pulling.
+func (g *pushGateway) enqueue(description string, buildPush func() Push) {
+	select {
+	case g.queue <- buildPush:
+		g.metricsGateway.Set(metrics.PushQueueDepth, int64(len(g.queue)))
+	default:
+		g.metricsGateway.Add(metrics.PushesDropped, 1)
+		g.logger.Error("push dropped, queue is full", "push", description)
+	}
 }
 
 func (g *pushGateway) PublishChargerEvent(charger entity.Charger) error {
-	return g.enqueue("charger "+charger.ChargerID, func() Push {
+	g.enqueue("charger "+charger.ChargerID, func() Push {
 		evse := g.config.Mapper.EVSE(charger)
 
 		return Push{
@@ -155,6 +155,8 @@ func (g *pushGateway) PublishChargerEvent(charger entity.Charger) error {
 			URL:     g.evseURL(charger),
 		}
 	})
+
+	return nil
 }
 
 func (g *pushGateway) evseURL(charger entity.Charger) string {
@@ -166,7 +168,7 @@ func (g *pushGateway) partyURL(module string) string {
 }
 
 func (g *pushGateway) PublishChargerRemovedEvent(charger entity.Charger) error {
-	return g.enqueue("charger removal "+charger.ChargerID, func() Push {
+	g.enqueue("charger removal "+charger.ChargerID, func() Push {
 		return Push{
 			Body:    g.config.Mapper.RemovedEVSE(charger),
 			Method:  http.MethodPut,
@@ -175,6 +177,8 @@ func (g *pushGateway) PublishChargerRemovedEvent(charger entity.Charger) error {
 			URL:     g.evseURL(charger),
 		}
 	})
+
+	return nil
 }
 
 // PublishCommandEvent only pushes resolved commands: the synchronous accept/reject was already
@@ -184,7 +188,7 @@ func (g *pushGateway) PublishCommandEvent(command entity.Command) error {
 		return nil
 	}
 
-	return g.enqueue("command result "+command.CommandID, func() Push {
+	g.enqueue("command result "+command.CommandID, func() Push {
 		return Push{
 			Body:   g.config.Mapper.CommandResult(command),
 			Method: http.MethodPost,
@@ -196,10 +200,12 @@ func (g *pushGateway) PublishCommandEvent(command entity.Command) error {
 			URL: command.CallbackReference,
 		}
 	})
+
+	return nil
 }
 
 func (g *pushGateway) PublishSessionEvent(session entity.Session) error {
-	return g.enqueue("session "+session.SessionID, func() Push {
+	g.enqueue("session "+session.SessionID, func() Push {
 		return Push{
 			Body:   g.config.Mapper.Session(session),
 			Method: http.MethodPut,
@@ -211,10 +217,12 @@ func (g *pushGateway) PublishSessionEvent(session entity.Session) error {
 			URL: g.partyURL("sessions") + "/" + session.SessionID,
 		}
 	})
+
+	return nil
 }
 
 func (g *pushGateway) PublishSiteEvent(site entity.Site) error {
-	return g.enqueue("site "+site.SiteID, func() Push {
+	g.enqueue("site "+site.SiteID, func() Push {
 		return Push{
 			Body:    g.config.Mapper.Location(site, nil),
 			Method:  http.MethodPut,
@@ -223,4 +231,6 @@ func (g *pushGateway) PublishSiteEvent(site entity.Site) error {
 			URL:     g.partyURL("locations") + "/" + site.SiteID,
 		}
 	})
+
+	return nil
 }

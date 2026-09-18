@@ -42,9 +42,9 @@ func NewTickerGateway(
 	}
 }
 
-func NewRealTickerFunc(frequency time.Duration) NewTickerFunc {
+func NewRealTickerFunc(interval time.Duration) NewTickerFunc {
 	return func() Ticker {
-		return realTicker{ticker: time.NewTicker(frequency)}
+		return realTicker{ticker: time.NewTicker(interval)}
 	}
 }
 

@@ -1,13 +1,13 @@
 package mockemsp
 
-// The OCPI receiver endpoints: what the CPO pushes to this eMSP.
-
 import (
 	"fmt"
 	"net/http"
 
 	"cposim/ocpi"
 )
+
+// The OCPI receiver endpoints: what the CPO pushes to this eMSP.
 
 func (h *handler) putLocation(w http.ResponseWriter, r *http.Request) {
 	var location ocpi.Location

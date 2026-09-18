@@ -1,4 +1,3 @@
-// Package ocpi is the inbound half of the OCPI adapter: the CPO-side HTTP endpoints an eMSP calls.
 package ocpi
 
 import (

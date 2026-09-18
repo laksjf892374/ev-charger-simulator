@@ -27,9 +27,9 @@ func (c *controller) forgetOldestCompleted() error {
 		return nil
 	}
 
-	forgottenSessionIDs := map[string]bool{}
+	isForgottenBySessionID := map[string]bool{}
 	for _, sessionID := range completedSessionIDs[:excess] {
-		forgottenSessionIDs[sessionID] = true
+		isForgottenBySessionID[sessionID] = true
 
 		if err := c.sessionRepository.Delete(sessionID); err != nil {
 			return fmt.Errorf("sessionRepository.Delete: %w", err)
@@ -42,7 +42,7 @@ func (c *controller) forgetOldestCompleted() error {
 	}
 
 	for _, cdr := range cdrs {
-		if !forgottenSessionIDs[cdr.SessionID] {
+		if !isForgottenBySessionID[cdr.SessionID] {
 			continue
 		}
 

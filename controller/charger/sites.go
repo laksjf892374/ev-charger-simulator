@@ -30,17 +30,25 @@ func (c *controller) AddSite(site entity.Site) (entity.Site, error) {
 		return entity.Site{}, fmt.Errorf("site %q already exists", site.SiteID)
 	}
 
-	site.UpdatedAt = c.clockGateway.Now()
-
-	if err := c.siteRepository.Upsert(site); err != nil {
-		return entity.Site{}, fmt.Errorf("siteRepository.Upsert: %w", err)
-	}
-
-	if err := c.eventsGateway.PublishSiteEvent(site); err != nil {
-		return entity.Site{}, fmt.Errorf("eventsGateway.PublishSiteEvent: %w", err)
+	if err := c.updateSite(&site); err != nil {
+		return entity.Site{}, fmt.Errorf("updateSite: %w", err)
 	}
 
 	return site, nil
+}
+
+func (c *controller) updateSite(site *entity.Site) error {
+	site.UpdatedAt = c.clockGateway.Now()
+
+	if err := c.siteRepository.Upsert(*site); err != nil {
+		return fmt.Errorf("siteRepository.Upsert: %w", err)
+	}
+
+	if err := c.eventsGateway.PublishSiteEvent(*site); err != nil {
+		return fmt.Errorf("eventsGateway.PublishSiteEvent: %w", err)
+	}
+
+	return nil
 }
 
 func validateSite(site entity.Site) error {

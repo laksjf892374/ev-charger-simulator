@@ -16,17 +16,18 @@ import (
 	"cposim/gateway/metrics"
 	"cposim/gateway/random"
 	"cposim/gateway/scheduler"
+	"cposim/handler/api"
 )
 
 const (
 	HealthPath = "/healthz"
-	ResetPath  = "/api/reset"
+	ResetPath  = api.BasePath + "/reset"
 
 	// Wall time. The simulation is unhealthy once it has not ticked for this long: requests would
 	// still be answered, but time would have stopped.
-	maxTickAge        = 5 * time.Second
-	simulationJobID   = "simulation"
-	tickFrequencyWall = 250 * time.Millisecond
+	maxTickAge       = 5 * time.Second
+	simulationJobID  = "simulation"
+	tickIntervalWall = 250 * time.Millisecond
 )
 
 type Config struct {
@@ -38,7 +39,8 @@ type Config struct {
 	// When set, the bundled mock eMSP is mounted in this process. It is this server's own base
 	// URL: the mock reaches the CPO through it, and gives it to the CPO as its callback address.
 	MockEMSPSelfBaseURL string
-	Out                 io.Writer
+	// Where the structured log goes. Nothing is logged when nil.
+	Out io.Writer
 }
 
 type Simulator interface {
@@ -70,7 +72,7 @@ type simulator struct {
 func NewSimulator(config Config) (Simulator, error) {
 	return NewSimulatorWithTicker(
 		config,
-		scheduler.NewRealTickerFunc(tickFrequencyWall),
+		scheduler.NewRealTickerFunc(tickIntervalWall),
 		random.NewMathGateway(),
 		time.Now,
 	)
@@ -84,6 +86,10 @@ func NewSimulatorWithTicker(
 ) (Simulator, error) {
 	// Everything the process reports (requests, failed ticks, failed or dropped pushes) is one
 	// structured log, written as JSON lines. slog serialises concurrent writers itself.
+	if config.Out == nil {
+		config.Out = io.Discard
+	}
+
 	logger := slog.New(slog.NewJSONHandler(config.Out, nil))
 
 	s := &simulator{
