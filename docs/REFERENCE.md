@@ -72,7 +72,8 @@ curl localhost:8080/healthz              # 503 once the simulation clock has bee
 curl localhost:8080/api/metrics          # pushes sent/failed/dropped, commands by result, ticks, requests, gauges
 ```
 
-Every request is logged to stdout as one JSON line (successful polls excepted). `/api/state`
+Everything the process reports goes to stdout as JSON lines in one format: each request
+(successful polls excepted), and any failed tick or failed or dropped push. `/api/state`
 carries a `world_id` that changes on reset, so a client holding older state knows to start over.
 
 Guardrails, because an instance may be public and everything is in memory: at most 50 chargers, 20
@@ -89,9 +90,9 @@ request bodies are capped; the HTTP server has read, write and idle timeouts.
 | `start_timeout`         | accepted, then `CommandResult TIMEOUT` after `timeout_s`                  |
 | `fault_mid_session`     | session ends after `after_s`, EVSE goes `OUTOFORDER`, cable stays locked, CDR for the partial energy |
 
-Adding one is a small type and one `Register` call in `behavior/builtin.go`; the API and UI pick it
+Adding one is a small type and one `Register` call in `controller/behavior/builtin.go`; the API and UI pick it
 up from the catalog. A charger may have several: they apply in list order, a refusal or a fault is
-final, and otherwise the later behavior wins (see the `behavior` package doc).
+final, and otherwise the later behavior wins (see the `controller/behavior` package doc).
 
 ### 3. Mock eMSP — `/emsp`
 
@@ -103,9 +104,9 @@ whatever it is told, which is what makes a misbehaving CPO visible.
 ## Tests
 
 - **Unit tests** per package: fakes not mocks, fake clock, no sleeps.
-- **Scenarios** (`app/scenarios_test.go`): whole user stories through the public APIs of a running
-  simulator with the mock eMSP mounted: happy paths, error cases, operator mistakes, and
-  operations (reset, health, metrics, logging).
+- **Scenarios** (`app/scenarios_*_test.go`): whole user stories through the public APIs of a running
+  simulator with the mock eMSP mounted: happy paths, error cases, operator mistakes, a first visit,
+  and operations (reset, health, metrics, logging).
 - **Invariants** (`app/invariants_test.go`): seeded random walks of hundreds of actions, checking
   after every step what must always be true (a CHARGING charger has a car, a locked cable and
   exactly one active session; energy never goes down or exceeds the battery; one CDR per completed
