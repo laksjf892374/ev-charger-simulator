@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -49,6 +50,15 @@ func run() error {
 	if config.EMSPBaseURL == "" {
 		config.EMSPBaseURL = selfBaseURL + mockemsp.ReceiverPath
 		config.MockEMSPSelfBaseURL = selfBaseURL
+	}
+
+	if speed := os.Getenv("SPEED"); speed != "" {
+		initialSpeed, err := strconv.ParseFloat(speed, 64)
+		if err != nil {
+			return fmt.Errorf("strconv.ParseFloat: SPEED: %w", err)
+		}
+
+		config.InitialSpeed = initialSpeed
 	}
 
 	simulator, err := app.NewSimulator(config)

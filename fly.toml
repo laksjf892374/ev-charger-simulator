@@ -6,6 +6,10 @@
 app = 'ev-charger-simulator'
 primary_region = 'sjc'
 
+[env]
+  # the hosted demo is for watching: a full charge takes under a minute
+  SPEED = '60'
+
 [build]
 [http_service]
   internal_port = 8080

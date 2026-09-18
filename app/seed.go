@@ -9,8 +9,10 @@ import (
 	"cposim/entity"
 )
 
-// seed creates the demo world. It goes through the controllers like any other caller, so the
-// eMSP hears about the seeded sites and chargers the same way it hears about later ones.
+// seed creates the demo world: one charger that never fails (so a first try always works), one
+// that is as reliable as a real one (the default for any new charger), and one set up to fail.
+// It goes through the controllers like any other caller, so the eMSP hears about the seeded sites
+// and chargers the same way it hears about later ones.
 func (w *world) seed() error {
 	seededSites := []struct {
 		chargers []charger.AddChargerInput
@@ -18,7 +20,7 @@ func (w *world) seed() error {
 	}{
 		{
 			chargers: []charger.AddChargerInput{
-				{MaxPowerKW: 150, PricePerKWH: 0.55},
+				{Behaviors: []entity.BehaviorSpec{}, MaxPowerKW: 150, PricePerKWH: 0.55},
 				{MaxPowerKW: 50},
 			},
 			site: entity.Site{

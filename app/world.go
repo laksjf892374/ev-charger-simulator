@@ -43,7 +43,7 @@ const (
 
 	defaultMaxPowerKW  = 50
 	defaultPricePerKWH = 0.45
-	initialSpeed       = 1
+	realTimeSpeed      = 1
 
 	// Limits that keep a public, unauthenticated, in-memory instance bounded.
 	maxChargers          = 50
@@ -94,6 +94,11 @@ func newWorld(
 	wallNow clock.NowFunc,
 	worldID string,
 ) (*world, error) {
+	initialSpeed := config.InitialSpeed
+	if initialSpeed == 0 {
+		initialSpeed = realTimeSpeed
+	}
+
 	clockGateway, err := clock.NewScaledGateway(maxSpeed, initialSpeed, wallNow)
 	if err != nil {
 		return nil, fmt.Errorf("clock.NewScaledGateway: %w", err)

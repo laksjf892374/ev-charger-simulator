@@ -32,6 +32,9 @@ const (
 type Config struct {
 	// Where OCPI pushes are delivered: the base URL of an eMSP's receiver endpoints.
 	EMSPBaseURL string
+	// How fast simulated time runs when a world is created, as a multiple of wall time. Zero
+	// means real time.
+	InitialSpeed float64
 	// When set, the bundled mock eMSP is mounted in this process. It is this server's own base
 	// URL: the mock reaches the CPO through it, and gives it to the CPO as its callback address.
 	MockEMSPSelfBaseURL string

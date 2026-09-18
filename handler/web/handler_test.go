@@ -22,7 +22,7 @@ func TestNewHandler(t *testing.T) {
 		// Then
 		assert.Equal(t, recorder.Code, http.StatusOK)
 		assert.Contains(t, recorder.Header().Get("Content-Type"), "text/html")
-		assert.Contains(t, recorder.Body.String(), "<title>CPO Simulator</title>")
+		assert.Contains(t, recorder.Body.String(), "<title>EV Charging Simulator</title>")
 	})
 
 	t.Run("answers not found for a file that is not embedded", func(t *testing.T) {

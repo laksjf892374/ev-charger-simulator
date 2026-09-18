@@ -365,6 +365,37 @@ func TestOperatorMistakeScenarios(t *testing.T) {
 	})
 }
 
+func TestFirstVisitScenarios(t *testing.T) {
+	t.Run("the demo world has a charger that never fails, an everyday one, and one set up to fail", func(t *testing.T) {
+		// Given
+		f := newMockEMSPFixture(t)
+
+		// When
+		_, body := f.request(t, http.MethodGet, "/api/chargers", "")
+
+		// Then
+		assert.Contains(t, body, `"behaviors":[],"charger_id":"EVSE-000001"`)
+		assert.Contains(t, body, `"behaviors":[{"kind":"realistic_reliability"}],"charger_id":"EVSE-000002"`)
+		assert.Contains(t, body, `"behaviors":[{"kind":"start_fails","params":{"delay_s":8}}],"charger_id":"EVSE-000003"`)
+	})
+
+	t.Run("a first try on Charger 1 works even when every roll of the dice is unlucky", func(t *testing.T) {
+		// Given
+		unluckyRandomGateway := random.NewFakeGateway()
+		f := newMockEMSPFixtureWithRandom(t, unluckyRandomGateway)
+
+		// When
+		sessionID := f.startCharging(t, validHubSiteID, validHubChargerID, defaultVehicle)
+		f.advance(t, 10*time.Minute)
+		f.phoneStop(t, sessionID)
+		f.advance(t, 2*time.Second)
+
+		// Then
+		believed := f.phoneSees(t, "the first charge was billed", func(believed mockemsp.State) bool { return len(believed.CDRs) == 1 })
+		assert.Equal(t, believed.Sessions[0].Status, "COMPLETED")
+	})
+}
+
 func TestOperationsScenarios(t *testing.T) {
 	t.Run("reset throws the world away, for the CPO and for the phone, and starts again from the demo data", func(t *testing.T) {
 		// Given

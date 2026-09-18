@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CPO Simulator</title>
+<title>EV Charging Simulator</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
 <style>
 :root{
@@ -42,11 +42,6 @@ button:focus-visible,summary:focus-visible,a:focus-visible,input:focus-visible,s
 .arrow{color:var(--muted)} .arrow.ocpi{color:var(--accent);font-weight:500}
 .explain p{margin:0;max-width:52ch}
 .explain p+p{margin-top:10px;color:var(--muted)}
-.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
-.steps li{display:flex;gap:8px;align-items:baseline}
-.steps .box{font-family:var(--mono);flex:none;white-space:pre;color:var(--muted)}
-.steps .done{color:var(--muted);text-decoration:line-through}
-.steps .done .box{color:var(--ok);text-decoration:none}
 .fan{display:grid;grid-template-columns:minmax(0,auto) auto minmax(150px,1fr);gap:14px;align-items:center;font-family:var(--mono);font-size:12px;margin-bottom:20px}
 .fan-left{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .fan-mid{display:flex;flex-direction:column;align-items:center;text-align:center;color:var(--muted)}
@@ -54,6 +49,27 @@ button:focus-visible,summary:focus-visible,a:focus-visible,input:focus-visible,s
 .fan-right{display:flex;flex-direction:column;gap:4px;border-left:2px solid var(--accent);padding-left:10px}
 .node.cpo{padding:3px 10px;font-family:var(--sans);font-size:12.5px}
 @media (max-width:620px){.fan{grid-template-columns:minmax(0,1fr)}.fan-right{border-left:0;border-top:2px solid var(--accent);padding:8px 0 0}}
+body:not(.advanced) .adv{display:none!important}
+.toggle{display:inline-flex;gap:6px;align-items:center;font-family:var(--sans);font-size:13px;color:var(--muted);cursor:pointer}
+.intro{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.intro p{margin:0}
+.lead{font-size:16px}
+.after{color:var(--muted)}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:10px 28px}
+.steps li{display:flex;gap:8px;align-items:center;color:var(--muted)}
+.steps .num{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px}
+.steps li.current{color:var(--ink);font-weight:600}
+.steps li.current .num{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.steps li.done .num{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.next{box-shadow:0 0 0 3px var(--ground),0 0 0 6px var(--accent);animation:next 1.4s ease-in-out infinite}
+@keyframes next{50%{box-shadow:0 0 0 3px var(--ground),0 0 0 9px color-mix(in srgb,var(--accent) 35%,transparent)}}
+.explain>summary small{font-weight:400;color:var(--muted);font-size:13px;margin-left:6px}
+.behind{padding:4px 20px 22px;display:flex;flex-direction:column;gap:24px}
+.behind h3{font-family:var(--cond);font-size:18px;font-weight:600;margin:0}
+.behind .hood{padding:0}
+.behind .more{border-top:1px solid var(--line);padding-top:20px}
+.name{font-weight:600}
+.name small{font-weight:400;color:var(--muted);margin-left:6px}
 .label{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
 .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px;align-items:start}
 .col{display:flex;flex-direction:column;gap:16px;min-width:0}
@@ -155,7 +171,7 @@ input[type=number]{width:84px}
 .lane.on[data-dir="out"] .ah.out,.lane.on[data-dir="in"] .ah.in{color:var(--accent);visibility:visible;font-size:15px}
 @keyframes lane-out{to{background-position:16px 0}}
 @keyframes lane-in{to{background-position:-16px 0}}
-@media (prefers-reduced-motion:reduce){.il-flow,.lane.on .bar{animation:none}}
+@media (prefers-reduced-motion:reduce){.il-flow,.lane.on .bar,.next{animation:none}}
 .log{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;background:var(--surface);max-height:440px;overflow-y:auto;overscroll-behavior:contain}
 .msg{border-bottom:1px solid var(--line)} .msg:last-child{border-bottom:0}
 .msg>summary{list-style:none;cursor:pointer;padding:9px 12px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:baseline}
@@ -182,56 +198,33 @@ input[type=number]{width:84px}
 <body>
 <div class="wrap">
   <header>
-    <h1>CPO Simulator</h1>
+    <h1>EV charging simulator</h1>
     <div class="clock">
-      <span id="clock-now" title="Simulated time">--:--:--</span>
-      <span class="seg" role="group" aria-label="Simulation speed">
+      <span class="adv" id="clock-now" title="Simulated time">--:--:--</span>
+      <span class="seg adv" role="group" aria-label="Simulation speed">
         <button data-speed="1">1×</button><button data-speed="10">10×</button><button data-speed="60">60×</button>
       </span>
-      <button class="btn small" id="reset" title="Throw this world away and start again from the demo data">Reset</button>
+      <button class="btn small adv" id="reset" title="Throw this world away and start again from the demo data">Reset</button>
+      <label class="toggle"><input type="checkbox" id="advanced-toggle"> Simulator controls</label>
     </div>
   </header>
 
-  <details class="explain" open>
-    <summary>What am I looking at?</summary>
-    <div class="body">
-      <div>
-        <div class="fan" role="img" aria-label="A driver uses one eMSP app, which connects over OCPI to many charging networks; this simulator stands in for one of them">
-          <div class="fan-left">
-            <span class="node"><b>Driver</b>one app, one bill</span>
-            <span class="arrow">──▶</span>
-            <span class="node"><b>eMSP</b>the app · an aggregator</span>
-          </div>
-          <div class="fan-mid"><span class="arrow ocpi">═ OCPI ═▶</span><small>one integration<br>per network</small></div>
-          <div class="fan-right">
-            <span class="node cpo">Tesla Supercharger</span>
-            <span class="node cpo">Electrify America</span>
-            <span class="node cpo">EVgo</span>
-            <span class="node cpo">ChargePoint</span>
-            <span class="node cpo me"><b>This simulator</b>a stand-in CPO</span>
-          </div>
-        </div>
-        <p>A <b>CPO</b> runs chargers. An <b>eMSP</b> is the app drivers use — one account that works across many CPOs, like a travel site on top of many airlines.</p>
-        <p>Testing against a real CPO takes a partner sandbox and physical chargers. This is a CPO you control: run the everyday flow, make chargers as reliable as real ones, or make one fail.</p>
-      </div>
-      <div>
-        <p class="label">Try it</p>
-        <ol class="steps" id="steps">
-          <li data-step="plugged"><span class="box">[ ]</span><span>Plug a car in at a simulated charger</span></li>
-          <li data-step="started"><span class="box">[ ]</span><span>Start charging from the phone</span></li>
-          <li data-step="billed"><span class="box">[ ]</span><span>Stop charging and check the receipt</span></li>
-          <li data-step="tweaked"><span class="box">[ ]</span><span>Then make a charger less reliable and try again</span></li>
-        </ol>
-      </div>
-    </div>
-  </details>
+  <section class="intro" aria-label="Start here">
+    <p class="lead">This is a pretend EV charging network. Its chargers are on the left; a driver's phone app is on the right. Try charging a car:</p>
+    <ol class="steps" id="steps">
+      <li data-step="plugged"><span class="num">1</span><span>Plug a car in at a charger</span></li>
+      <li data-step="started"><span class="num">2</span><span>Start charging from the phone</span></li>
+      <li data-step="billed"><span class="num">3</span><span>Stop charging, and see the receipt</span></li>
+    </ol>
+    <p class="after" id="after-steps" hidden>That's the whole loop. For more, turn on <b>Simulator controls</b> (top right) or open <b>What's really going on?</b> below.</p>
+  </section>
 
   <div class="cols">
     <section class="col" aria-labelledby="h-charger">
       <div class="colhead"><h2 id="h-charger">Simulated chargers</h2><span class="n" id="charger-count"></span></div>
       <div class="chargers" id="chargers" tabindex="0" aria-label="Chargers"></div>
       <div class="flash" id="flash" role="status"></div>
-      <button class="add" id="add-toggle">+ Add charger</button>
+      <button class="add adv" id="add-toggle">+ Add charger</button>
       <form class="addform" id="add-form" hidden>
         <label>Site<select id="add-site"></select></label>
         <label>Max power (kW)<input type="number" id="add-power" min="1" step="1" placeholder="50"></label>
@@ -239,7 +232,7 @@ input[type=number]{width:84px}
         <button class="btn primary" type="submit">Add</button>
         <button class="btn" type="button" id="add-cancel">Cancel</button>
       </form>
-      <details class="states">
+      <details class="states adv">
         <summary>Every charger state, and what the eMSP is told</summary>
         <div class="legend" id="legend"></div>
       </details>
@@ -262,9 +255,29 @@ input[type=number]{width:84px}
       <div class="diverge" id="diverge"></div>
     </section>
   </div>
-
-  <details class="traffic" id="traffic">
-    <summary>Under the hood: how the CPO and eMSP talk <span class="count" id="msg-count">0</span></summary>
+  <details class="explain" id="behind">
+    <summary>What's really going on? <small>the two companies involved, and the messages between them</small></summary>
+    <div class="behind">
+      <div>
+        <div class="fan" role="img" aria-label="A driver uses one eMSP app, which connects over OCPI to many charging networks; this simulator stands in for one of them">
+          <div class="fan-left">
+            <span class="node"><b>Driver</b>one app, one bill</span>
+            <span class="arrow">──▶</span>
+            <span class="node"><b>eMSP</b>the app · an aggregator</span>
+          </div>
+          <div class="fan-mid"><span class="arrow ocpi">═ OCPI ═▶</span><small>one integration<br>per network</small></div>
+          <div class="fan-right">
+            <span class="node cpo">Tesla Supercharger</span>
+            <span class="node cpo">Electrify America</span>
+            <span class="node cpo">EVgo</span>
+            <span class="node cpo">ChargePoint</span>
+            <span class="node cpo me"><b>This simulator</b>a stand-in CPO</span>
+          </div>
+        </div>
+        <p>A <b>CPO</b> runs chargers. An <b>eMSP</b> is the app drivers use — one account that works across many CPOs, like a travel site on top of many airlines.</p>
+        <p>Testing against a real CPO takes a partner sandbox and physical chargers. This is a CPO you control: run the everyday flow, make chargers as reliable as real ones, or make one fail.</p>
+      </div>
+      <h3>The messages behind the scenes <span class="count" id="msg-count">0</span></h3>
     <div class="hood">
       <p class="hood-intro">The two companies talk over <b>OCPI</b>, which is split into modules — one line each below. Pick a message to see which line it travelled on, and which way. Pick a line to see its messages.</p>
       <div class="wire">
@@ -291,9 +304,7 @@ input[type=number]{width:84px}
       </div>
       <div class="log" id="log" tabindex="0" aria-label="Messages, newest first"></div>
     </div>
-  </details>
-
-  <section class="more" aria-labelledby="h-more">
+      <section class="more" aria-labelledby="h-more">
     <h2 id="h-more">Learn more</h2>
     <ul>
       <li><a href="https://afdc.energy.gov/fuels/electricity-stations" target="_blank" rel="noopener">EV charging basics</a><span>US Department of Energy: charger types, connectors and how public charging works.</span></li>
@@ -305,6 +316,8 @@ input[type=number]{width:84px}
       <li><a href="/api/state">This page's data</a><span>Everything here comes from two public APIs: <code>/api</code> (the simulator) and <code>/emsp/api</code> (the phone). Script them from CI, or point <code>EMSP_BASE_URL</code> at your own eMSP.</span></li>
     </ul>
   </section>
+    </div>
+  </details>
 </div>
 
 <script>
@@ -313,6 +326,8 @@ input[type=number]{width:84px}
 
   var POLL_MS = 1000, MAX_LOG = 200;
   var PILL = {AVAILABLE: "ok", PREPARING: "warn", CHARGING: "busy", FINISHING: "idle", FAULTED: "bad"};
+  // what a person would call each state; the technical names are shown with Simulator controls on
+  var PLAIN = {AVAILABLE: "Free", PREPARING: "Waiting", CHARGING: "Charging", FINISHING: "Done", FAULTED: "Out of order"};
   var COLOR = {AVAILABLE: "var(--ok)", PREPARING: "var(--warn)", CHARGING: "var(--busy)", FINISHING: "var(--muted)", FAULTED: "var(--bad)"};
   var TOLD = {AVAILABLE: "AVAILABLE", PREPARING: "BLOCKED", CHARGING: "CHARGING", FINISHING: "BLOCKED", FAULTED: "OUTOFORDER"};
   var DOT = {AVAILABLE: "var(--ok)", BLOCKED: "var(--warn)", CHARGING: "var(--busy)", OUTOFORDER: "var(--bad)"};
@@ -320,13 +335,18 @@ input[type=number]{width:84px}
 
   var cpo = null, emsp = null, lastSequence = 0, messageCount = 0;
   var editingChargerID = null, worldID = null;
-  var done = {plugged: false, started: false, billed: false, tweaked: false};
+  var done = {plugged: false, started: false, billed: false};
 
   function $(id) { return document.getElementById(id); }
   function esc(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
       return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c];
     });
+  }
+  // "EVSE-000002" is "Charger 2" to a person; anything else keeps its own name
+  function chargerName(id) {
+    var match = /^EVSE-0*(\d+)$/.exec(id);
+    return match ? "Charger " + match[1] : id;
   }
   function kwh(value) { return (value || 0).toFixed(1) + " kWh"; }
   function money(value) { return "$" + (value || 0).toFixed(2); }
@@ -400,12 +420,12 @@ input[type=number]{width:84px}
     switch (charger.state) {
       case "CHARGING":
         var active = charger.active_session || {};
-        return Math.round(active.power_kw || 0) + " kW · " + soc + " · " + kwh(active.energy_delivered_kwh) + " delivered";
-      case "PREPARING": return "Plugged in · " + soc + " · waiting for the phone to start it";
-      case "FINISHING": return "Done · " + kwh(lastEnergy(charger.charger_id)) + " delivered · " + soc;
-      case "FAULTED": return charger.vehicle && charger.connector_locked ? "Cable is stuck in the car" : "Out of order";
+        return "Charging at " + Math.round(active.power_kw || 0) + " kW · " + soc + " · " + kwh(active.energy_delivered_kwh) + " so far";
+      case "PREPARING": return "Car plugged in (" + soc + "). Now start it from the phone.";
+      case "FINISHING": return "Done: " + kwh(lastEnergy(charger.charger_id)) + " delivered, " + soc + ". Unplug to free the charger.";
+      case "FAULTED": return charger.vehicle && charger.connector_locked ? "Broken, and the cable is stuck in the car" : "Broken";
     }
-    return "";
+    return "Nobody here. Plug a car in.";
   }
   function actionButton(charger) {
     var actions = {
@@ -422,7 +442,8 @@ input[type=number]{width:84px}
     });
     var odd = (charger.behaviors || []).some(function (spec) { return spec.kind !== "realistic_reliability"; });
     var text = labels.length ? "This charger " + labels.join(", and ") : "This charger never fails";
-    return '<div class="behaves' + (odd ? " odd" : "") + '"><span>' + esc(text) + '</span><button class="linkish" data-edit>' +
+    if (odd) text = "Set up to misbehave: " + labels.join(", and ");
+    return '<div class="behaves' + (odd ? " odd" : " adv") + '"><span>' + esc(text) + '</span><button class="linkish adv" data-edit>' +
       (editingChargerID === charger.charger_id ? "Close" : "Change") + "</button></div>";
   }
   function editor(charger) {
@@ -462,10 +483,10 @@ input[type=number]{width:84px}
         container.appendChild(card);
       }
       var parts = card.children;
-      setHTML(parts[0], '<span class="id">' + esc(id) + '</span><span class="pill ' + PILL[charger.state] + '">' + charger.state + "</span>");
+      setHTML(parts[0], '<span class="name">' + esc(chargerName(id)) + "<small>" + charger.max_power_kw + ' kW</small><small class="id adv">' + esc(id) + "</small></span>" +
+        '<span class="pill ' + PILL[charger.state] + '">' + PLAIN[charger.state] + '<span class="adv"> · ' + charger.state + "</span></span>");
       setHTML(parts[1], draw(charger.state, !!charger.vehicle));
       var meta = metaLine(charger);
-      parts[2].hidden = !meta;
       setHTML(parts[2], esc(meta));
       setHTML(parts[3], actionButton(charger));
       setHTML(parts[4], behaviorLine(charger));
@@ -506,7 +527,6 @@ input[type=number]{width:84px}
         specs.push({kind: box.dataset.kind, params: params});
       });
       editingChargerID = null;
-      done.tweaked = true;
       act(call("PUT", base + "/behaviors", specs));
     }
   });
@@ -528,6 +548,14 @@ input[type=number]{width:84px}
     if ($("add-price").value) input.price_per_kwh = parseFloat($("add-price").value);
     act(call("POST", "/api/chargers", input)).then(closeAddForm);
   });
+
+  function setAdvanced(on) {
+    document.body.classList.toggle("advanced", on);
+    $("advanced-toggle").checked = on;
+    try { localStorage.setItem("advanced", on ? "1" : ""); } catch (error) { /* private window: not remembered */ }
+  }
+  $("advanced-toggle").addEventListener("change", function (event) { setAdvanced(event.target.checked); });
+  try { setAdvanced(localStorage.getItem("advanced") === "1"); } catch (error) { setAdvanced(false); }
 
   $("reset").addEventListener("click", function () { act(call("POST", "/api/reset")); });
 
@@ -554,12 +582,12 @@ input[type=number]{width:84px}
       o = '<div class="gauge"><svg viewBox="0 0 64 64" role="img" aria-label="Charging"><circle class="ring-bg" cx="32" cy="32" r="26"></circle>' +
         '<circle class="ring-fg" cx="32" cy="32" r="26" stroke-dasharray="' + dash + ' 163.4" transform="rotate(-90 32 32)"></circle>' +
         '<path class="ring-bolt" d="M35 16 L23 35 H31 L28 48 L41 28 H33 Z"></path></svg>' +
-        '<div><div class="big">' + kwh(session.kwh) + '</div><div class="meta">Charging on ' + esc(session.evse_uid) + " · " + money(session.total_cost && session.total_cost.excl_vat) + "</div></div></div>" +
+        '<div><div class="big">' + kwh(session.kwh) + '</div><div class="meta">Charging at ' + esc(chargerName(session.evse_uid)) + " · " + money(session.total_cost && session.total_cost.excl_vat) + "</div></div></div>" +
         '<div class="btns" style="margin-top:10px"><button class="btn danger" data-stop="' + esc(session.id) + '"' + (stopping ? " disabled" : "") + ">" + (stopping ? "Stopping…" : "Stop charging") + "</button></div>";
     } else if (startPending()) {
-      o = '<div class="meta">Asking ' + esc(command.evse_uid) + " to start… plug in if you haven't.</div>";
+      o = '<div class="meta">Asking ' + esc(chargerName(command.evse_uid)) + " to start… plug the car in if you haven't.</div>";
     } else if (command && command.kind === "START_SESSION" && command.result !== "ACCEPTED") {
-      o = '<div class="meta bad">Couldn\'t start on ' + esc(command.evse_uid) + " (" + esc(command.result) + ")" + (command.message ? ": " + esc(command.message) : "") + "</div>";
+      o = '<div class="meta bad">Couldn\'t start ' + esc(chargerName(command.evse_uid)) + (command.message ? ": " + esc(command.message) : "") + '<span class="adv"> (' + esc(command.result) + ")</span></div>";
     } else {
       o = '<div class="empty">Not charging. Pick a charger below.</div>';
     }
@@ -573,18 +601,18 @@ input[type=number]{width:84px}
         else if (evse.status === "CHARGING") right = '<span class="meta">in use</span>';
         else if (evse.status === "OUTOFORDER") right = '<span class="meta">out of order</span>';
         else right = '<button class="btn primary small" data-start="' + esc(evse.uid) + '" data-location="' + esc(location.id) + '"' + (busy ? " disabled" : "") + ">Start</button>";
-        rows += '<span class="k"><i class="dot" style="--st:' + (DOT[evse.status] || "var(--muted)") + '"></i>' + esc(evse.uid) + "</span>" + right;
+        rows += '<span class="k"><i class="dot" style="--st:' + (DOT[evse.status] || "var(--muted)") + '"></i>' + esc(chargerName(evse.uid)) + "</span>" + right;
       });
     });
     setHTML($("nearby"), rows || '<span class="empty">No chargers known yet.</span>');
 
     var receipts = (emsp.cdrs || []).slice().reverse().map(function (cdr) {
-      return "<span>" + kwh(cdr.total_energy) + " · " + esc(cdr.cdr_location && cdr.cdr_location.evse_uid) + "</span><span>" + money(cdr.total_cost && cdr.total_cost.excl_vat) + "</span>";
+      return "<span>" + kwh(cdr.total_energy) + " · " + esc(chargerName(cdr.cdr_location && cdr.cdr_location.evse_uid)) + "</span><span>" + money(cdr.total_cost && cdr.total_cost.excl_vat) + "</span>";
     }).join("");
     setHTML($("receipts"), receipts || '<span class="empty">None yet.</span>');
 
     var truth = session && cpo.chargers.filter(function (c) { return c.session_id === session.id; })[0];
-    setHTML($("diverge"), "The phone only knows what the CPO tells it." + (truth && truth.active_session
+    setHTML($("diverge"), "The phone only knows what the charging network tells it." + (truth && truth.active_session
       ? " <b>Charger: " + kwh(truth.active_session.energy_delivered_kwh) + ". Phone: " + kwh(session.kwh) + ".</b>" : ""));
   }
 
@@ -655,14 +683,36 @@ input[type=number]{width:84px}
   function renderSteps() {
     done.plugged = done.plugged || cpo.chargers.some(function (c) { return !!c.vehicle; }) || cpo.sessions.length > 0;
     if (emsp) {
-      done.started = done.started || emsp.commands.some(function (c) { return c.kind === "START_SESSION"; });
+      done.started = done.started || emsp.sessions.length > 0;
       done.billed = done.billed || emsp.cdrs.length > 0;
     }
+    var current = !done.plugged ? "plugged" : !done.started ? "started" : !done.billed ? "billed" : null;
     document.querySelectorAll("#steps li").forEach(function (item) {
       var isDone = done[item.dataset.step];
       item.classList.toggle("done", isDone);
-      item.querySelector(".box").textContent = isDone ? "[✓]" : "[ ]";
+      item.classList.toggle("current", item.dataset.step === current);
+      item.querySelector(".num").textContent = isDone ? "✓" : {plugged: 1, started: 2, billed: 3}[item.dataset.step];
     });
+    $("after-steps").hidden = current !== null;
+    pointAt(nextButton(current));
+  }
+  // The one button that moves the visitor forward. Whatever state they have got the world into,
+  // there is always a sensible next click; Charger 1 never fails, so it is preferred.
+  function nextButton(current) {
+    if (!current || !emsp) return null;
+    var session = mySession();
+    if (session) return current === "billed" ? document.querySelector("[data-stop]:not([disabled])") : null;
+    if (startPending()) return null;
+    var waiting = cpo.chargers.filter(function (c) { return c.state === "PREPARING" || c.state === "FINISHING"; })[0];
+    if (waiting) return document.querySelector('[data-start="' + waiting.charger_id + '"]:not([disabled])');
+    var free = cpo.chargers.filter(function (c) { return c.state === "AVAILABLE"; })[0];
+    return free ? document.querySelector('.charger[data-id="' + free.charger_id + '"] [data-action="plug-in"]') : null;
+  }
+  function pointAt(target) {
+    document.querySelectorAll(".next").forEach(function (element) {
+      if (element !== target) element.classList.remove("next");
+    });
+    if (target && !target.classList.contains("next")) target.classList.add("next");
   }
   $("legend").innerHTML = ["AVAILABLE", "PREPARING", "CHARGING", "FINISHING", "FAULTED"].map(function (state) {
     return '<figure><div class="illus">' + draw(state, state !== "AVAILABLE" && state !== "FAULTED") + "</div><figcaption>" + state +

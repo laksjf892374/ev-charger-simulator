@@ -65,7 +65,12 @@ main → app (DI root) → handler/* → controller/command → controller/charg
 - `handler/web` — the single static page (`static/index.html`, embedded with `go:embed`; no build
   step, no framework). It polls `/api/state` and `/emsp/api/state` once a second and has no
   endpoints of its own. The left column shows ground truth from the control API; the phone shows
-  only what the mock eMSP believes. Keep that separation: it is the point of the demo.
+  only what the mock eMSP believes. Keep that separation: it is the point of the demo. The page is for someone who has never heard
+  of EV roaming: by default it shows one sentence, three steps with the next button highlighted,
+  plain names ("Charger 1", "Free") and nothing else. Anything more (behaviors, add/remove, speed,
+  reset, technical IDs and states) carries the `adv` class and appears only with *Simulator
+  controls* on; explanations and the message log live in the collapsed *What's really going on?*.
+  New UI follows the same rule: if a first-time visitor does not need it, it is `adv`.
 - `gateway/random` — the only source of randomness. Controllers draw one roll per start attempt
   and one per charger per tick and hand it to behaviors, which never draw their own.
 - `gateway/metrics` — process-wide named counters and gauges, served with derived gauges at
