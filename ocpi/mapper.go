@@ -150,7 +150,7 @@ func (m Mapper) Session(session entity.Session) Session {
 		PartyID:                m.PartyID,
 		StartDateTime:          Timestamp(session.StartedAt),
 		Status:                 string(session.State),
-		TotalCost:              &Price{ExclVAT: roundTo(session.EnergyDeliveredKWH*session.PricePerKWH, 2)},
+		TotalCost:              &Price{ExclVAT: session.TotalCost},
 	}
 
 	if session.EndedAt != nil {

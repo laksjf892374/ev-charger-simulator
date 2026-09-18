@@ -4,6 +4,20 @@
 // the simulation by implementing one or more of the interceptor interfaces. To add a scenario:
 // write the type, implement the hooks it needs, and add one Register call in builtin.go. The
 // control API and UI pick it up from Catalog without changes.
+//
+// # When a charger has more than one behavior
+//
+// Behaviors are applied in the order the charger lists them, each seeing what the earlier ones
+// decided. Two rules settle disagreements, and both are pinned by tests:
+//
+//   - A refusal or a fault is final. Once any behavior sets Reject (on a start) or Fault (on a
+//     tick), no later behavior can take it back, and a rejected start ignores any forced result.
+//   - Everything else is last-writer-wins. A later behavior's ForcedResult, ResultDelay and
+//     ResultMessage replace an earlier one's. PowerFactor multiplies, so it composes instead.
+//
+// All behaviors of one charger share a single random Roll per event. Two probabilistic behaviors
+// on the same charger are therefore correlated, not independent; give a behavior its own roll
+// (a new field on the context struct, drawn by the controller) if that ever matters.
 package behavior
 
 import (

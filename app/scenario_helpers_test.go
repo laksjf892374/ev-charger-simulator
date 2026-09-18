@@ -36,6 +36,7 @@ type sessionView struct {
 	SessionID          string  `json:"session_id"`
 	State              string  `json:"state"`
 	StopReason         string  `json:"stop_reason"`
+	TotalCost          float64 `json:"total_cost"`
 }
 
 type cdrView struct {

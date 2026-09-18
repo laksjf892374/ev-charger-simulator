@@ -105,7 +105,8 @@ request bodies are capped; the HTTP server has read, write and idle timeouts.
 | `fault_mid_session`     | session ends after `after_s`, EVSE goes `OUTOFORDER`, cable stays locked, CDR for the partial energy |
 
 Adding one is a small type and one `Register` call in `behavior/builtin.go`; the API and UI pick it
-up from the catalog.
+up from the catalog. A charger may have several: they apply in list order, a refusal or a fault is
+final, and otherwise the later behavior wins (see the `behavior` package doc).
 
 ### 3. Mock eMSP — `/emsp`
 

@@ -135,7 +135,9 @@ func (c *controller) StartSession(input StartSessionInput) (entity.Command, erro
 	command.Message = attempt.ResultMessage
 	command.Token = input.Token
 
+	// a refusal is final: whatever else the behaviors forced no longer applies
 	if attempt.Reject {
+		command.ForcedResult = ""
 		command.Message = attempt.RejectMessage
 		command.State = entity.CommandStateRejected
 		c.metricsGateway.Add(metrics.CommandsRejected, 1)

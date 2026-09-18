@@ -39,7 +39,12 @@ main → app (DI root) → handler/* → controller/command → controller/charg
   (simulated time = wall time × speed), `events` (how the core announces changes; protocol
   adapters implement it), `identifier` (sequential IDs), `scheduler` (one goroutine per job on an
   injectable `Ticker`).
-- `behavior/` — the fault/scenario registry. Stateless types implementing `StartInterceptor`
+- Pricing lives in exactly one function, `cost` in `controller/session`. The session carries the
+  result as `TotalCost`; the CDR, the OCPI mapper and the UI copy it and must never recompute it.
+  Real tariffs replace that function (probably with a pure `pricing` package, shaped like
+  `behavior`) and nothing else.
+- `behavior/` — the fault/scenario registry. Several behaviors on one charger apply in list order;
+  a refusal or fault is final, everything else is last-writer-wins (package doc, pinned by tests). Stateless types implementing `StartInterceptor`
   and/or `TickInterceptor`, configured per charger as `entity.BehaviorSpec`. Pure logic, so
   controllers call it directly rather than through an interface.
 - `controller/session` owns the session lifecycle, energy bookkeeping and CDR creation.

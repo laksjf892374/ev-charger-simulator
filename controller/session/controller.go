@@ -129,6 +129,7 @@ func (c *controller) RecordSessionProgress(
 	now := c.clockGateway.Now()
 	session.EnergyDeliveredKWH += energyDeliveredKWH
 	session.PowerKW = powerKW
+	session.TotalCost = cost(session)
 	session.UpdatedAt = now
 
 	// Progress is recorded every tick, but listeners only hear about it every
@@ -217,6 +218,7 @@ func (c *controller) StopSession(sessionID string, stopReason entity.StopReason)
 	session.PowerKW = 0
 	session.State = entity.SessionStateCompleted
 	session.StopReason = stopReason
+	session.TotalCost = cost(session)
 	session.UpdatedAt = now
 
 	if err := c.updateSession(session); err != nil {
@@ -250,7 +252,7 @@ func (c *controller) createCDR(session entity.Session) error {
 		SiteID:                 session.SiteID,
 		StartedAt:              session.StartedAt,
 		Token:                  session.Token,
-		TotalCost:              roundToCents(session.EnergyDeliveredKWH * session.PricePerKWH),
+		TotalCost:              session.TotalCost,
 	}
 
 	if err := c.cdrRepository.Upsert(cdr); err != nil {
@@ -262,6 +264,13 @@ func (c *controller) createCDR(session entity.Session) error {
 	}
 
 	return nil
+}
+
+// cost is the one place a session is priced. Today that is energy times the price the charger
+// had when the session started; tariffs with time, session or idle components would replace this
+// function (most likely with a pricing package) and nothing else.
+func cost(session entity.Session) float64 {
+	return roundToCents(session.EnergyDeliveredKWH * session.PricePerKWH)
 }
 
 func roundToCents(amount float64) float64 {

@@ -60,7 +60,7 @@ func TestLocation(t *testing.T) {
 }
 
 func TestSession(t *testing.T) {
-	t.Run("maps an active session without an end time and with a running cost", func(t *testing.T) {
+	t.Run("maps an active session without an end time, copying its running cost as it is", func(t *testing.T) {
 		// Given
 		session := entity.Session{
 			ChargerID:          "EVSE-000001",
@@ -71,6 +71,7 @@ func TestSession(t *testing.T) {
 			StartedAt:          validStartedAt,
 			State:              entity.SessionStateActive,
 			Token:              entity.Token{UID: "TOKEN-1"},
+			TotalCost:          4.2,
 		}
 
 		// When
@@ -79,7 +80,8 @@ func TestSession(t *testing.T) {
 		// Then
 		assert.Equal(t, mapped.Status, "ACTIVE")
 		assert.Equal(t, mapped.KWH, 10.123)
-		assert.Equal(t, mapped.TotalCost.ExclVAT, 5.06)
+		// deliberately not energy x price: the mapper must not price anything itself
+		assert.Equal(t, mapped.TotalCost.ExclVAT, 4.2)
 		assert.Equal(t, mapped.EndDateTime == nil, true)
 		assert.Equal(t, mapped.CDRToken.UID, "TOKEN-1")
 		assert.Equal(t, mapped.EVSEUID, "EVSE-000001")

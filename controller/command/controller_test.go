@@ -143,6 +143,24 @@ func TestStartSession(t *testing.T) {
 		assert.Equal(t, startChargingCallCount, 0)
 	})
 
+	t.Run("rejects the command when one behavior refuses, whatever another behavior forced", func(t *testing.T) {
+		// Given
+		f := newFixture(t)
+		f.chargerController.GetChargerResult.Behaviors = []entity.BehaviorSpec{
+			{Kind: behavior.KindRejectStart},
+			{Kind: behavior.KindStartFails},
+		}
+
+		// When
+		startCommand, err := f.commandController.StartSession(validStartSessionInput)
+
+		// Then
+		assert.NoError(t, err)
+		assert.Equal(t, startCommand.State, entity.CommandStateRejected)
+		assert.Equal(t, startCommand.ForcedResult, entity.CommandResult(""))
+		assert.Equal(t, startCommand.Message, "charger refused the request")
+	})
+
 	t.Run("gives the charger's behaviors one random roll per start attempt", func(t *testing.T) {
 		// Given
 		f := newFixture(t)

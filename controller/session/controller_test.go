@@ -231,6 +231,7 @@ func TestRecordSessionProgress(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, progressedSession.EnergyDeliveredKWH, 0.75)
 		assert.Equal(t, progressedSession.PowerKW, 48.0)
+		assert.Equal(t, progressedSession.TotalCost, 0.38)
 		sessionEventCount = len(f.eventsGateway.SessionEvents)
 		assert.Equal(t, sessionEventCount, 2)
 		assert.Equal(t, f.eventsGateway.SessionEvents[1], progressedSession)
@@ -294,6 +295,7 @@ func TestStopSession(t *testing.T) {
 		assert.Equal(t, cdrs[0].SessionID, startedSession.SessionID)
 		assert.Equal(t, cdrs[0].EnergyDeliveredKWH, 24.333)
 		assert.Equal(t, cdrs[0].TotalCost, 12.17)
+		assert.Equal(t, stoppedSession.TotalCost, cdrs[0].TotalCost)
 		assert.Equal(t, cdrs[0].Currency, "EUR")
 	})
 }

@@ -226,6 +226,59 @@ func TestRealisticReliability(t *testing.T) {
 	})
 }
 
+func TestPrecedence(t *testing.T) {
+	startFails := entity.BehaviorSpec{Kind: behavior.KindStartFails, Params: json.RawMessage(`{"delay_s": 5}`)}
+	startTimeout := entity.BehaviorSpec{Kind: behavior.KindStartTimeout, Params: json.RawMessage(`{"timeout_s": 40}`)}
+	rejectStart := entity.BehaviorSpec{Kind: behavior.KindRejectStart}
+
+	t.Run("lets the later of two forced results win, delay and message included", func(t *testing.T) {
+		// Given
+		failsThenTimesOut := behavior.StartAttempt{}
+		timesOutThenFails := behavior.StartAttempt{}
+
+		// When
+		assert.NoError(t, behavior.ApplyStartInterceptors([]entity.BehaviorSpec{startFails, startTimeout}, &failsThenTimesOut))
+		assert.NoError(t, behavior.ApplyStartInterceptors([]entity.BehaviorSpec{startTimeout, startFails}, &timesOutThenFails))
+
+		// Then
+		assert.Equal(t, failsThenTimesOut.ForcedResult, entity.CommandResultTimeout)
+		assert.Equal(t, failsThenTimesOut.ResultDelay, 40*time.Second)
+		assert.Equal(t, failsThenTimesOut.ResultMessage, "the charger never answered")
+		assert.Equal(t, timesOutThenFails.ForcedResult, entity.CommandResultFailed)
+		assert.Equal(t, timesOutThenFails.ResultDelay, 5*time.Second)
+	})
+
+	t.Run("keeps a refusal final wherever it is in the list", func(t *testing.T) {
+		// Given
+		rejectedFirst := behavior.StartAttempt{}
+		rejectedLast := behavior.StartAttempt{}
+
+		// When
+		assert.NoError(t, behavior.ApplyStartInterceptors([]entity.BehaviorSpec{rejectStart, startFails}, &rejectedFirst))
+		assert.NoError(t, behavior.ApplyStartInterceptors([]entity.BehaviorSpec{startFails, rejectStart}, &rejectedLast))
+
+		// Then
+		assert.Equal(t, rejectedFirst.Reject, true)
+		assert.Equal(t, rejectedLast.Reject, true)
+	})
+
+	t.Run("keeps a fault final even when a later behavior would not have faulted", func(t *testing.T) {
+		// Given
+		tick := behavior.Tick{ChargingDuration: 10 * time.Minute, Elapsed: time.Second, Roll: 0.99}
+		specs := []entity.BehaviorSpec{
+			{Kind: behavior.KindFaultMidSession},
+			{Kind: behavior.KindRealisticReliability},
+		}
+
+		// When
+		err := behavior.ApplyTickInterceptors(specs, &tick)
+
+		// Then
+		assert.NoError(t, err)
+		assert.Equal(t, tick.Fault, true)
+	})
+}
+
 func TestApplyTickInterceptors(t *testing.T) {
 	t.Run("does not fault before the configured charging duration", func(t *testing.T) {
 		// Given

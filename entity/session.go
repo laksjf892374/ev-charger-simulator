@@ -47,7 +47,10 @@ type Session struct {
 	State                  SessionState `json:"state"`
 	StopReason             StopReason   `json:"stop_reason,omitempty"`
 	Token                  Token        `json:"token"`
-	UpdatedAt              time.Time    `json:"updated_at"`
+	// What the session has cost so far. Only the session controller computes it; everything else
+	// (the CDR, the OCPI mapper, the UI) copies it.
+	TotalCost float64   `json:"total_cost"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Token identifies the driver, as issued by the eMSP.

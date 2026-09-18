@@ -230,7 +230,8 @@ func checkInvariants(view worldView, lastEnergyBySessionID map[string]float64) s
 	billedSessionIDs := map[string]bool{}
 	for _, cdr := range view.CDRs {
 		session := sessionBySessionID[cdr.SessionID]
-		if billedSessionIDs[cdr.SessionID] || session.State != "COMPLETED" || session.EnergyDeliveredKWH != cdr.EnergyDeliveredKWH {
+		// the bill is the session's own cost, however that came to be computed
+		if billedSessionIDs[cdr.SessionID] || session.State != "COMPLETED" || session.EnergyDeliveredKWH != cdr.EnergyDeliveredKWH || session.TotalCost != cdr.TotalCost {
 			return fmt.Sprintf("CDR %s does not match its session: %+v vs %+v", cdr.CDRID, cdr, session)
 		}
 
