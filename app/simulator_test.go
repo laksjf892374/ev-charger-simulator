@@ -51,9 +51,30 @@ func (c *wallClock) Advance(duration time.Duration) {
 	c.now = c.now.Add(duration)
 }
 
+// safeBuffer is an io.Writer a test can read while the simulator's goroutines are still writing.
+type safeBuffer struct {
+	buffer bytes.Buffer
+	mu     sync.Mutex
+}
+
+func (b *safeBuffer) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buffer.Write(data)
+}
+
+func (b *safeBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buffer.String()
+}
+
 type fixture struct {
 	fakeEMSP   *app.FakeEMSP
 	fakeTicker *scheduler.FakeTicker
+	out        *safeBuffer
 	server     *httptest.Server
 	wallClock  *wallClock
 }

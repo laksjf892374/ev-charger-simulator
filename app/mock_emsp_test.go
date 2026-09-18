@@ -1,7 +1,6 @@
 package app_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 
 	"cposim/app"
 	"cposim/assert"
+	"cposim/gateway/random"
 	"cposim/gateway/scheduler"
 	"cposim/mockemsp"
 )
@@ -23,6 +23,13 @@ const (
 func newMockEMSPFixture(t *testing.T) fixture {
 	t.Helper()
 
+	return newMockEMSPFixtureWithRandom(t, luckyRandomGateway())
+}
+
+func newMockEMSPFixtureWithRandom(t *testing.T, randomGateway random.Gateway) fixture {
+	t.Helper()
+
+	out := &safeBuffer{}
 	fakeTicker := scheduler.NewFakeTicker()
 	clock := &wallClock{now: time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)}
 
@@ -34,10 +41,10 @@ func newMockEMSPFixture(t *testing.T) fixture {
 		app.Config{
 			EMSPBaseURL:         selfBaseURL + mockemsp.ReceiverPath,
 			MockEMSPSelfBaseURL: selfBaseURL,
-			Out:                 &bytes.Buffer{},
+			Out:                 out,
 		},
 		func() scheduler.Ticker { return fakeTicker },
-		luckyRandomGateway(),
+		randomGateway,
 		clock.Now,
 	)
 	assert.NoError(t, err)
@@ -55,6 +62,7 @@ func newMockEMSPFixture(t *testing.T) fixture {
 
 	return fixture{
 		fakeTicker: fakeTicker,
+		out:        out,
 		server:     server,
 		wallClock:  clock,
 	}
