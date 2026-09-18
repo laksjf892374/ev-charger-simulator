@@ -56,6 +56,12 @@ main → app (DI root) → handler/* → controller/command → controller/charg
 - `handler/api` — the control API (`/api/...`): everything a person or CI script can do to the
   simulated world. The UI has no private endpoints. A refused physical action is 409, a bad
   request body 400, a rejected configuration 422.
+- `handler/web` — the single static page (`static/index.html`, embedded with `go:embed`; no build
+  step, no framework). It polls `/api/state` and `/emsp/api/state` once a second and has no
+  endpoints of its own. The left column shows ground truth from the control API; the phone shows
+  only what the mock eMSP believes. Keep that separation: it is the point of the demo.
+- `gateway/random` — the only source of randomness. Controllers draw one roll per start attempt
+  and one per charger per tick and hand it to behaviors, which never draw their own.
 - `app/` — DI root: the only place that constructs concrete implementations, holds the tunable
   constants, and seeds the demo world. `app/simulator_test.go` and `app/mock_emsp_test.go` are the
   end-to-end tests: real HTTP, `scheduler.FakeTicker`, a fake wall clock, and either

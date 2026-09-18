@@ -21,6 +21,7 @@ import (
 	"cposim/gateway/trace"
 	"cposim/handler/api"
 	ocpihandler "cposim/handler/ocpi"
+	"cposim/handler/web"
 	"cposim/mockemsp"
 	"cposim/ocpi"
 	cdrrepo "cposim/repository/cdr"
@@ -210,6 +211,12 @@ func NewSimulatorWithTicker(
 		sessionController,
 		traceGateway,
 	))
+
+	webHandler, err := web.NewHandler()
+	if err != nil {
+		return nil, fmt.Errorf("web.NewHandler: %w", err)
+	}
+	mux.Handle("/", webHandler)
 
 	// The mock eMSP is a guest in this process: it is handed URLs, not controllers.
 	var mockEMSP mockemsp.Mock
