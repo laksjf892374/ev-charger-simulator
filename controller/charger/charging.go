@@ -91,7 +91,7 @@ func (c *controller) endSession(
 
 	if charger.Vehicle != nil {
 		vehicle := *charger.Vehicle
-		vehicle.StateOfCharge = stateOfChargeAfter(vehicle, stoppedSession.EnergyDeliveredKWH)
+		vehicle.StateOfCharge = StateOfChargeAfter(vehicle, stoppedSession.EnergyDeliveredKWH)
 		charger.Vehicle = &vehicle
 	}
 
@@ -106,6 +106,9 @@ func (c *controller) endSession(
 	return stoppedSession, nil
 }
 
-func stateOfChargeAfter(vehicle entity.Vehicle, energyDeliveredKWH float64) float64 {
+// StateOfChargeAfter is the only place a battery level is derived from delivered energy. The
+// charger stores the level as of plug-in or the end of the last session; during a session the
+// live level is this function of the session's energy.
+func StateOfChargeAfter(vehicle entity.Vehicle, energyDeliveredKWH float64) float64 {
 	return math.Min(1, vehicle.StateOfCharge+energyDeliveredKWH/vehicle.BatteryCapacityKWH)
 }

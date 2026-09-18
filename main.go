@@ -56,7 +56,7 @@ func run() error {
 	if speed := os.Getenv("SPEED"); speed != "" {
 		initialSpeed, err := strconv.ParseFloat(speed, 64)
 		if err != nil {
-			return fmt.Errorf("strconv.ParseFloat: SPEED: %w", err)
+			return fmt.Errorf("strconv.ParseFloat: %w", err)
 		}
 
 		config.InitialSpeed = initialSpeed

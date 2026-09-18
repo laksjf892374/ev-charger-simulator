@@ -1,4 +1,4 @@
-package app
+package app_test
 
 import (
 	"fmt"
@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-const fakeEMSPTimeout = time.Second
+const (
+	fakeEMSPBufferSize = 1024
+	fakeEMSPTimeout    = time.Second
+)
 
 type FakeEMSPRequest struct {
 	Body   string
@@ -21,15 +24,15 @@ type FakeEMSPRequest struct {
 // FakeEMSP is an HTTP server that accepts and records whatever the simulator pushes to it.
 type FakeEMSP struct {
 	URL      string
-	mu       sync.Mutex
 	received chan struct{}
 	requests []FakeEMSPRequest
 	server   *httptest.Server
+	mu       sync.Mutex
 }
 
 func NewFakeEMSP() *FakeEMSP {
 	fakeEMSP := &FakeEMSP{
-		received: make(chan struct{}, 1024),
+		received: make(chan struct{}, fakeEMSPBufferSize),
 	}
 
 	fakeEMSP.server = httptest.NewServer(http.HandlerFunc(fakeEMSP.record))

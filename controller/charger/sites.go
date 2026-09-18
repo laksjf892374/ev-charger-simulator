@@ -52,7 +52,11 @@ func validateSite(site entity.Site) error {
 		return fmt.Errorf("site ID must be 1-36 letters, digits, '_' or '-': site ID %q", site.SiteID)
 	}
 
-	for _, text := range []string{site.Address, site.City, site.CountryCode, site.Name} {
+	if site.Country != "" && !validCountry.MatchString(site.Country) {
+		return fmt.Errorf("site country must be three capital letters (ISO 3166-1 alpha-3): country %q", site.Country)
+	}
+
+	for _, text := range []string{site.Address, site.City, site.Name} {
 		if len(text) > maxTextLength {
 			return fmt.Errorf("site text fields must be at most %d characters", maxTextLength)
 		}

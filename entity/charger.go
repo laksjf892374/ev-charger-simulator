@@ -36,14 +36,15 @@ type Charger struct {
 }
 
 type Site struct {
-	Address     string    `json:"address"`
-	City        string    `json:"city"`
-	CountryCode string    `json:"country_code"`
-	Latitude    float64   `json:"latitude"`
-	Longitude   float64   `json:"longitude"`
-	Name        string    `json:"name"`
-	SiteID      string    `json:"site_id"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Address string `json:"address"`
+	City    string `json:"city"`
+	// ISO 3166-1 alpha-3, as OCPI's Location.country wants it.
+	Country   string    `json:"country"`
+	Latitude  float64   `json:"latitude"`
+	Longitude float64   `json:"longitude"`
+	Name      string    `json:"name"`
+	SiteID    string    `json:"site_id"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Vehicle struct {

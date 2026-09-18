@@ -4,6 +4,7 @@ package ocpi
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -29,12 +30,12 @@ func (t Timestamp) MarshalJSON() ([]byte, error) {
 func (t *Timestamp) UnmarshalJSON(data []byte) error {
 	var text string
 	if err := json.Unmarshal(data, &text); err != nil {
-		return err
+		return fmt.Errorf("json.Unmarshal: %w", err)
 	}
 
 	parsed, err := time.Parse(time.RFC3339, text)
 	if err != nil {
-		return err
+		return fmt.Errorf("time.Parse: %w", err)
 	}
 
 	*t = Timestamp(parsed)

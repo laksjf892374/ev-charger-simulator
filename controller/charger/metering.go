@@ -89,7 +89,7 @@ func (c *controller) meter(
 	chargingElapsed := min(elapsed, tick.ChargingDuration)
 
 	vehicle := *charger.Vehicle
-	stateOfCharge := stateOfChargeAfter(vehicle, activeSession.EnergyDeliveredKWH)
+	stateOfCharge := StateOfChargeAfter(vehicle, activeSession.EnergyDeliveredKWH)
 	powerKW := deliveredPowerKW(charger, vehicle, stateOfCharge) * tick.PowerFactor
 	energyKWH := powerKW * chargingElapsed.Hours()
 

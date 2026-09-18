@@ -15,7 +15,7 @@ func TestFakeGateway(t *testing.T) {
 		fakeGateway := events.NewFakeGateway()
 		fakeGateway.PublishCDREventErr = errors.New("boom")
 		fakeGateway.PublishChargerEventErr = errors.New("boom")
-		fakeGateway.PublishChargerRemovedErr = errors.New("boom")
+		fakeGateway.PublishChargerRemovedEventErr = errors.New("boom")
 		fakeGateway.PublishCommandEventErr = errors.New("boom")
 		fakeGateway.PublishSessionEventErr = errors.New("boom")
 		fakeGateway.PublishSiteEventErr = errors.New("boom")

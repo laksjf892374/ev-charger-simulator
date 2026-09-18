@@ -35,7 +35,10 @@ const (
 )
 
 // IDs end up in URL paths and in OCPI fields limited to 36 characters.
-var validID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,36}$`)
+var (
+	validCountry = regexp.MustCompile(`^[A-Z]{3}$`)
+	validID      = regexp.MustCompile(`^[A-Za-z0-9_-]{1,36}$`)
+)
 
 type Config struct {
 	// Given to a new charger that does not say how it should behave. An explicitly empty list

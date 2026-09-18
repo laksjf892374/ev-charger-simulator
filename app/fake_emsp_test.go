@@ -5,14 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"cposim/app"
 	"cposim/internal/assert"
 )
 
 func TestFakeEMSP(t *testing.T) {
 	t.Run("returns an error when no matching request arrives in time", func(t *testing.T) {
 		// Given
-		fakeEMSP := app.NewFakeEMSP()
+		fakeEMSP := NewFakeEMSP()
 		defer fakeEMSP.Close()
 
 		// When
@@ -24,7 +23,7 @@ func TestFakeEMSP(t *testing.T) {
 
 	t.Run("records requests and finds them by path suffix and body", func(t *testing.T) {
 		// Given
-		fakeEMSP := app.NewFakeEMSP()
+		fakeEMSP := NewFakeEMSP()
 		defer fakeEMSP.Close()
 
 		// When
@@ -35,7 +34,7 @@ func TestFakeEMSP(t *testing.T) {
 
 		// Then
 		assert.NoError(t, err)
-		assert.Equal(t, request, app.FakeEMSPRequest{
+		assert.Equal(t, request, FakeEMSPRequest{
 			Body:   `{"id": "CDR-1"}`,
 			Method: http.MethodPost,
 			Path:   "/ocpi/cdrs",

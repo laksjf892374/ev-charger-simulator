@@ -138,12 +138,12 @@ func TestSimulatorWithMockEMSP(t *testing.T) {
 		// Then
 		assert.Equal(t, statusCode, http.StatusOK)
 		believed, err = f.awaitBelief(t, "the session is COMPLETED and billed", func(believed mockemsp.State) bool {
-			return believed.Sessions[0].Status == "COMPLETED" && len(believed.CDRs) == 1
+			// the stop's own result is pushed after the session and the bill, so wait for it too
+			return believed.Sessions[0].Status == "COMPLETED" && len(believed.CDRs) == 1 && believed.Commands[1].Result == "ACCEPTED"
 		})
 		assert.NoError(t, err)
 		// 6 min + the stop command's 2 s latency at 50 kW and 0.45/kWh
 		assert.Equal(t, believed.CDRs[0].TotalCost.ExclVAT, 2.26)
-		assert.Equal(t, believed.Commands[1].Result, "ACCEPTED")
 	})
 
 	t.Run("shows the driver's app a TIMEOUT when nobody plugs in", func(t *testing.T) {

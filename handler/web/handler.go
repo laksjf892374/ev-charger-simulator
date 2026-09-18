@@ -4,6 +4,7 @@ package web
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"net/http"
 )
@@ -14,7 +15,7 @@ var embedded embed.FS
 func NewHandler() (http.Handler, error) {
 	static, err := fs.Sub(embedded, "static")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fs.Sub: %w", err)
 	}
 
 	return http.FileServerFS(static), nil

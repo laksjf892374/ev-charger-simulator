@@ -7,19 +7,19 @@ import (
 )
 
 type FakeGateway struct {
-	CDREvents                []entity.CDR
-	ChargerEvents            []entity.Charger
-	ChargerRemovedEvents     []entity.Charger
-	CommandEvents            []entity.Command
-	PublishCDREventErr       error
-	PublishChargerEventErr   error
-	PublishChargerRemovedErr error
-	PublishCommandEventErr   error
-	PublishSessionEventErr   error
-	PublishSiteEventErr      error
-	SessionEvents            []entity.Session
-	SiteEvents               []entity.Site
-	mu                       sync.Mutex
+	CDREvents                     []entity.CDR
+	ChargerEvents                 []entity.Charger
+	ChargerRemovedEvents          []entity.Charger
+	CommandEvents                 []entity.Command
+	PublishCDREventErr            error
+	PublishChargerEventErr        error
+	PublishChargerRemovedEventErr error
+	PublishCommandEventErr        error
+	PublishSessionEventErr        error
+	PublishSiteEventErr           error
+	SessionEvents                 []entity.Session
+	SiteEvents                    []entity.Site
+	mu                            sync.Mutex
 }
 
 func NewFakeGateway() *FakeGateway {
@@ -50,7 +50,7 @@ func (g *FakeGateway) PublishChargerRemovedEvent(charger entity.Charger) error {
 
 	g.ChargerRemovedEvents = append(g.ChargerRemovedEvents, charger)
 
-	return g.PublishChargerRemovedErr
+	return g.PublishChargerRemovedEventErr
 }
 
 func (g *FakeGateway) PublishCommandEvent(command entity.Command) error {

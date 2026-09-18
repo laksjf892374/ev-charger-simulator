@@ -72,7 +72,7 @@ func (b *safeBuffer) String() string {
 }
 
 type fixture struct {
-	fakeEMSP   *app.FakeEMSP
+	fakeEMSP   *FakeEMSP
 	fakeTicker *scheduler.FakeTicker
 	out        *safeBuffer
 	server     *httptest.Server
@@ -82,7 +82,7 @@ type fixture struct {
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 
-	fakeEMSP := app.NewFakeEMSP()
+	fakeEMSP := NewFakeEMSP()
 	fakeTicker := scheduler.NewFakeTicker()
 	clock := &wallClock{now: time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)}
 

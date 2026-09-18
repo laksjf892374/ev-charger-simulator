@@ -80,8 +80,9 @@ func decodeEnvelope(response *http.Response, data any) (refusal string, err erro
 		StatusCode    int             `json:"status_code"`
 		StatusMessage string          `json:"status_message"`
 	}
-	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
-		return "", fmt.Errorf("json.Decode: %w", err)
+	decoder := json.NewDecoder(response.Body)
+	if err := decoder.Decode(&envelope); err != nil {
+		return "", fmt.Errorf("decoder.Decode: %w", err)
 	}
 
 	if envelope.StatusCode != ocpi.StatusCodeSuccess {

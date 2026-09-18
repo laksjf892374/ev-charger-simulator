@@ -4,7 +4,6 @@ package api
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 
 	"cposim/controller/charger"
@@ -49,16 +48,16 @@ func (h handler) chargerView(viewed entity.Charger) chargerView {
 		return view
 	}
 
-	stateOfCharge := viewed.Vehicle.StateOfCharge
+	energyDeliveredKWH := 0.0
 	if viewed.SessionID != "" {
 		// best effort: without the session the view is merely less detailed
 		if activeSession, err := h.sessionController.GetSession(viewed.SessionID); err == nil {
 			view.ActiveSession = &activeSession
-			stateOfCharge += activeSession.EnergyDeliveredKWH / viewed.Vehicle.BatteryCapacityKWH
+			energyDeliveredKWH = activeSession.EnergyDeliveredKWH
 		}
 	}
 
-	stateOfCharge = math.Min(1, stateOfCharge)
+	stateOfCharge := charger.StateOfChargeAfter(*viewed.Vehicle, energyDeliveredKWH)
 	view.LiveStateOfCharge = &stateOfCharge
 
 	return view
@@ -126,18 +125,24 @@ func (h handler) performAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var updatedCharger entity.Charger
+	var calledMethod string
 	var err error
 
 	switch action := r.PathValue("action"); action {
 	case ActionClearFault:
+		calledMethod = "ClearFault"
 		updatedCharger, err = h.chargerController.ClearFault(existingCharger.ChargerID)
 	case ActionInjectFault:
+		calledMethod = "InjectFault"
 		updatedCharger, err = h.chargerController.InjectFault(existingCharger.ChargerID)
 	case ActionPlugIn:
+		calledMethod = "PlugIn"
 		updatedCharger, err = h.chargerController.PlugIn(existingCharger.ChargerID, vehicle)
 	case ActionPressStop:
+		calledMethod = "PressStopButton"
 		updatedCharger, err = h.chargerController.PressStopButton(existingCharger.ChargerID)
 	case ActionUnplug:
+		calledMethod = "Unplug"
 		updatedCharger, err = h.chargerController.Unplug(existingCharger.ChargerID)
 	default:
 		respondError(w, http.StatusNotFound, fmt.Errorf("unknown action %q", action))
@@ -145,7 +150,7 @@ func (h handler) performAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		respondError(w, http.StatusConflict, err)
+		respondError(w, http.StatusConflict, fmt.Errorf("chargerController.%s: %w", calledMethod, err))
 		return
 	}
 

@@ -26,7 +26,7 @@ func TestAddCharger(t *testing.T) {
 	t.Run("reports why the controller refused the charger", func(t *testing.T) {
 		// Given
 		f := newFixture(t)
-		f.chargerController.PhysicalActionErr = errors.New("boom")
+		f.chargerController.MutationErr = errors.New("boom")
 
 		// When
 		recorder := serve(t, f, http.MethodPost, "/api/chargers", `{"site_id": "SITE-1"}`)
@@ -45,7 +45,7 @@ func TestAddCharger(t *testing.T) {
 
 		// Then
 		assert.Equal(t, recorder.Code, http.StatusCreated)
-		assert.Equal(t, f.chargerController.PhysicalActionCalls, []charger.PhysicalActionCall{{Action: "AddCharger"}})
+		assert.Equal(t, f.chargerController.MutationCalls, []charger.MutationCall{{Method: "AddCharger"}})
 	})
 }
 
@@ -77,7 +77,7 @@ func TestPerformAction(t *testing.T) {
 	t.Run("answers conflict when the charger's state does not allow the action", func(t *testing.T) {
 		// Given
 		f := newFixture(t)
-		f.chargerController.PhysicalActionErr = errors.New("connector locked")
+		f.chargerController.MutationErr = errors.New("connector locked")
 
 		// When
 		recorder := serve(t, f, http.MethodPost, "/api/chargers/"+validChargerID+"/actions/unplug", "")
@@ -99,12 +99,12 @@ func TestPerformAction(t *testing.T) {
 		}
 
 		// Then
-		assert.Equal(t, f.chargerController.PhysicalActionCalls, []charger.PhysicalActionCall{
-			{Action: "PlugIn", ChargerID: validChargerID},
-			{Action: "PressStopButton", ChargerID: validChargerID},
-			{Action: "Unplug", ChargerID: validChargerID},
-			{Action: "InjectFault", ChargerID: validChargerID},
-			{Action: "ClearFault", ChargerID: validChargerID},
+		assert.Equal(t, f.chargerController.MutationCalls, []charger.MutationCall{
+			{ID: validChargerID, Method: "PlugIn"},
+			{ID: validChargerID, Method: "PressStopButton"},
+			{ID: validChargerID, Method: "Unplug"},
+			{ID: validChargerID, Method: "InjectFault"},
+			{ID: validChargerID, Method: "ClearFault"},
 		})
 	})
 }
@@ -136,7 +136,7 @@ func TestRemoveCharger(t *testing.T) {
 	t.Run("answers conflict when the charger cannot be removed", func(t *testing.T) {
 		// Given
 		f := newFixture(t)
-		f.chargerController.PhysicalActionErr = errors.New("has an active session")
+		f.chargerController.MutationErr = errors.New("has an active session")
 
 		// When
 		recorder := serve(t, f, http.MethodDelete, "/api/chargers/"+validChargerID, "")
@@ -161,7 +161,7 @@ func TestUpdateBehaviors(t *testing.T) {
 	t.Run("reports why the controller refused the behaviors", func(t *testing.T) {
 		// Given
 		f := newFixture(t)
-		f.chargerController.PhysicalActionErr = errors.New("unknown behavior kind")
+		f.chargerController.MutationErr = errors.New("unknown behavior kind")
 
 		// When
 		recorder := serve(t, f, http.MethodPut, "/api/chargers/"+validChargerID+"/behaviors", `[{"kind": "nope"}]`)

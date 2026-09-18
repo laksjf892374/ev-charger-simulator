@@ -146,12 +146,12 @@ func Build(specs []entity.BehaviorSpec) ([]Behavior, error) {
 
 		built, err := registered.build(spec.Params)
 		if err != nil {
-			return nil, fmt.Errorf("build %q: %w", spec.Kind, err)
+			return nil, fmt.Errorf("registered.build: %w", err)
 		}
 
 		if validator, ok := built.(Validator); ok {
 			if err := validator.Validate(); err != nil {
-				return nil, fmt.Errorf("behavior %q: %w", spec.Kind, err)
+				return nil, fmt.Errorf("validator.Validate: %w", err)
 			}
 		}
 
